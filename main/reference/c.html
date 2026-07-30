@@ -896,7 +896,7 @@
 <dt class="sig sig-object cpp">
 <span class="target" id="group__nanoarrow-array_1ga170d9363f43e1cadc75057d240d85a6b"></span><span class="sig-name descname"><span class="pre">NANOARROW_DLL</span> <span class="pre">ArrowErrorCode</span> <span class="pre">ArrowArrayMoveShared</span> <span class="pre">(struct</span> <span class="pre">ArrowArray</span> <span class="pre">*array,</span> <span class="pre">struct</span> <span class="pre">ArrowArray</span> <span class="pre">*shared)</span></span></dt>
 <dd><p>Create a shared copy of an <a class="reference internal" href="#struct_arrow_array"><span class="std std-ref">ArrowArray</span></a>. </p>
-<p>Recursively converts array into a version where all buffers are reference-counted. On success, shared is a new <a class="reference internal" href="#struct_arrow_array"><span class="std std-ref">ArrowArray</span></a> whose buffers are backed by ArrowSharedArray references, and array is consumed (release set to NULL). The resulting shared array can be safely moved or have its buffers cloned via ArrowSharedBufferClone(). </p>
+<p>Recursively converts array into a version where all buffers are reference-counted. On success, shared is a new <a class="reference internal" href="#struct_arrow_array"><span class="std std-ref">ArrowArray</span></a> whose buffers are backed by ArrowSharedArray references, and array is consumed (release set to NULL). The resulting shared array can be safely moved or have its buffers cloned via ArrowSharedBufferClone(). On error, (e.g., failure to allocate a copy of a buffer), the input array is released as it may have been partially moved at the point the error occurs. </p>
 </dd></dl>
 
 <dl class="cpp function">

@@ -1,5 +1,14 @@
 # Changelog
 
+## nanoarrow 0.8.0-1
+
+CRAN release: 2026-06-04
+
+- fix: Eliminate warnings for gcc16 and \_FORTIFY_SOURCE=3 for snprintf
+  ([\#892](https://github.com/apache/arrow-nanoarrow/issues/892))
+- fix!: Ensure ArrowTypeString never returns NULL to fix warning on gcc
+  ([\#885](https://github.com/apache/arrow-nanoarrow/issues/885))
+
 ## nanoarrow 0.8.0
 
 CRAN release: 2026-02-10

@@ -5,7 +5,7 @@ the Arrow C Data interface. This data structure can be used to represent
 an
 [`arrow::schema()`](https://arrow.apache.org/docs/r/reference/schema.html),
 an
-[`arrow::field()`](https://arrow.apache.org/docs/r/reference/Field-class.html),
+[`arrow::field()`](https://arrow.apache.org/docs/r/reference/Field.html),
 or an
 [`arrow::DataType`](https://arrow.apache.org/docs/r/reference/DataType-class.html).
 Note that in nanoarrow, an

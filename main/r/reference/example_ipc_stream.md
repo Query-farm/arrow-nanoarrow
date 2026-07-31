@@ -5,14 +5,14 @@ An example stream that can be used for testing or examples.
 ## Usage
 
 ``` r
-example_ipc_stream(compression = c("none", "zstd"))
+example_ipc_stream(compression = c("none", "zstd", "lz4"))
 ```
 
 ## Arguments
 
 - compression:
 
-  One of "none" or "zstd"
+  One of "none", "zstd", or "lz4"
 
 ## Value
 

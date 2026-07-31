@@ -8,6 +8,8 @@ Underlying 'nanoarrow' C library build
 nanoarrow_version(runtime = TRUE)
 
 nanoarrow_with_zstd()
+
+nanoarrow_with_lz4()
 ```
 
 ## Arguments
@@ -27,5 +29,7 @@ against.
 nanoarrow_version()
 #> [1] "0.9.0-SNAPSHOT"
 nanoarrow_with_zstd()
+#> [1] TRUE
+nanoarrow_with_lz4()
 #> [1] TRUE
 ```

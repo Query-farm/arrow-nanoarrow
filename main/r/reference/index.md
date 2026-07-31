@@ -93,7 +93,8 @@
   [`nanoarrow_pointer_set_protected()`](nanoarrow_pointer_is_valid.md) :
   Danger zone: low-level pointer operations
 - [`nanoarrow_version()`](nanoarrow_version.md)
-  [`nanoarrow_with_zstd()`](nanoarrow_version.md) : Underlying
+  [`nanoarrow_with_zstd()`](nanoarrow_version.md)
+  [`nanoarrow_with_lz4()`](nanoarrow_version.md) : Underlying
   'nanoarrow' C library build
 - [`read_nanoarrow()`](read_nanoarrow.md)
   [`write_nanoarrow()`](read_nanoarrow.md) : Read/write serialized

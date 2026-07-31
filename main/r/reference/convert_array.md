@@ -68,8 +68,8 @@ Conversions are implemented for the following R vector types:
   does not check for valid UTF-8: if you need finer-grained control over
   encodings, use `to = blob::blob()`.
 
-- [`factor()`](https://rdrr.io/r/base/factor.html): Dictionary-encoded
-  arrays of strings can be converted to
+- [`base::factor()`](https://rdrr.io/r/base/factor.html):
+  Dictionary-encoded arrays of strings can be converted to
   [`factor()`](https://rdrr.io/r/base/factor.html); however, this must
   be specified explicitly (i.e., `convert_array(array, factor())`)
   because arrays arriving in chunks can have dictionaries that contain
@@ -97,8 +97,8 @@ Conversions are implemented for the following R vector types:
   List, large list, and fixed-size list types can be converted to
   [`vctrs::list_of()`](https://vctrs.r-lib.org/reference/list_of.html).
 
-- [`matrix()`](https://rdrr.io/r/base/matrix.html): Fixed-size list
-  types can be converted to `matrix(ptype, ncol = fixed_size)`.
+- [`base::matrix()`](https://rdrr.io/r/base/matrix.html): Fixed-size
+  list types can be converted to `matrix(ptype, ncol = fixed_size)`.
 
 - [`data.frame()`](https://rdrr.io/r/base/data.frame.html): Struct types
   can be converted to

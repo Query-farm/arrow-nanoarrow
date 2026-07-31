@@ -94,7 +94,7 @@ through a floating-point double (e.g., very large uint64 and int64 values).</p><
 <li><p><code><a href="https://rdrr.io/r/base/character.html" class="external-link">character()</a></code>: String and large string types can be converted to
 <code><a href="https://rdrr.io/r/base/character.html" class="external-link">character()</a></code>. The conversion does not check for valid UTF-8: if you need
 finer-grained control over encodings, use <code>to = blob::blob()</code>.</p></li>
-<li><p><code><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor()</a></code>: Dictionary-encoded arrays of strings can be converted to
+<li><p><code><a href="https://rdrr.io/r/base/factor.html" class="external-link">base::factor()</a></code>: Dictionary-encoded arrays of strings can be converted to
 <code><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor()</a></code>; however, this must be specified explicitly (i.e.,
 <code>convert_array(array, factor())</code>) because arrays arriving
 in chunks can have dictionaries that contain different levels. Use
@@ -109,7 +109,7 @@ attribute of <code>to</code>.</p></li>
 be converted to <code><a href="https://blob.tidyverse.org/reference/blob.html" class="external-link">blob::blob()</a></code>.</p></li>
 <li><p><code><a href="https://vctrs.r-lib.org/reference/list_of.html" class="external-link">vctrs::list_of()</a></code>: List, large list, and fixed-size list types can be
 converted to <code><a href="https://vctrs.r-lib.org/reference/list_of.html" class="external-link">vctrs::list_of()</a></code>.</p></li>
-<li><p><code><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix()</a></code>: Fixed-size list types can be converted to
+<li><p><code><a href="https://rdrr.io/r/base/matrix.html" class="external-link">base::matrix()</a></code>: Fixed-size list types can be converted to
 <code>matrix(ptype, ncol = fixed_size)</code>.</p></li>
 <li><p><code><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame()</a></code>: Struct types can be converted to <code><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame()</a></code>.</p></li>
 <li><p><code><a href="https://vctrs.r-lib.org/reference/vctrs-unspecified.html" class="external-link">vctrs::unspecified()</a></code>: Any type can be converted to <code><a href="https://vctrs.r-lib.org/reference/vctrs-unspecified.html" class="external-link">vctrs::unspecified()</a></code>;

@@ -27,7 +27,7 @@ against.
 
 ``` r
 nanoarrow_version()
-#> [1] "0.9.0-SNAPSHOT"
+#> [1] "0.10.0-SNAPSHOT"
 nanoarrow_with_zstd()
 #> [1] TRUE
 nanoarrow_with_lz4()

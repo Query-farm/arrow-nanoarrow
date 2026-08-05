@@ -15,13 +15,13 @@ Source:
 [`DESCRIPTION`](https://github.com/apache/arrow-nanoarrow/blob/main/r/DESCRIPTION)
 
 Dunnington D, Apache Arrow (2026). *nanoarrow: Interface to the
-'nanoarrow' 'C' Library*. R package version 0.8.0.9000,
+'nanoarrow' 'C' Library*. R package version 0.9.0.9000,
 <https://arrow.apache.org/nanoarrow/latest/r/>.
 
     @Manual{,
       title = {nanoarrow: Interface to the 'nanoarrow' 'C' Library},
       author = {Dewey Dunnington and {Apache Arrow}},
       year = {2026},
-      note = {R package version 0.8.0.9000},
+      note = {R package version 0.9.0.9000},
       url = {https://arrow.apache.org/nanoarrow/latest/r/},
     }

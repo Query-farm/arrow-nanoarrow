@@ -1,5 +1,14 @@
 # Changelog
 
+## nanoarrow 0.9.0
+
+CRAN release: 2026-08-04
+
+- Add dictionary support for IPC read
+  ([\#861](https://github.com/apache/arrow-nanoarrow/issues/861))
+- Add LZ4 compression support for IPC read
+  ([\#916](https://github.com/apache/arrow-nanoarrow/issues/916))
+
 ## nanoarrow 0.8.0-1
 
 CRAN release: 2026-06-04

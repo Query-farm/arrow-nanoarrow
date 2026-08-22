@@ -423,13 +423,13 @@ library</a>.</p>
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h2>
 <p>You can install the released version of nanoarrow from
 <a class="reference external" href="https://cran.r-project.org/">CRAN</a> with:</p>
-<div class="highlight-r notranslate"><div class="highlight"><pre><span></span><span class="nf">install.packages</span><span class="p">(</span><span class="s">&quot;nanoarrow&quot;</span><span class="p">)</span>
+<div class="highlight-r notranslate"><div class="highlight"><pre><span></span><span class="nf">install.packages</span><span class="p">(</span><span class="s">"nanoarrow"</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>You can install the development version of nanoarrow from
 <a class="reference external" href="https://github.com/">GitHub</a> with:</p>
-<div class="highlight-r notranslate"><div class="highlight"><pre><span></span><span class="c1"># install.packages(&quot;remotes&quot;)</span>
-<span class="n">remotes</span><span class="o">::</span><span class="nf">install_github</span><span class="p">(</span><span class="s">&quot;apache/arrow-nanoarrow/r&quot;</span><span class="p">)</span>
+<div class="highlight-r notranslate"><div class="highlight"><pre><span></span><span class="c1"># install.packages("remotes")</span>
+<span class="n">remotes</span><span class="o">::</span><span class="nf">install_github</span><span class="p">(</span><span class="s">"apache/arrow-nanoarrow/r"</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>If you can load the package, you’re good to go!</p>
@@ -454,22 +454,22 @@ arrow R package <code class="docutils literal notranslate"><span class="pre">Dat
 <code class="docutils literal notranslate"><span class="pre">na_XXX()</span></code> functions to construct them.</p>
 <div class="highlight-r notranslate"><div class="highlight"><pre><span></span><span class="nf">infer_nanoarrow_schema</span><span class="p">(</span><span class="m">1</span><span class="o">:</span><span class="m">5</span><span class="p">)</span>
 <span class="c1">#&gt; &lt;nanoarrow_schema int32&gt;</span>
-<span class="c1">#&gt;  $ format    : chr &quot;i&quot;</span>
-<span class="c1">#&gt;  $ name      : chr &quot;&quot;</span>
+<span class="c1">#&gt;  $ format    : chr "i"</span>
+<span class="c1">#&gt;  $ name      : chr ""</span>
 <span class="c1">#&gt;  $ metadata  : list()</span>
 <span class="c1">#&gt;  $ flags     : int 2</span>
 <span class="c1">#&gt;  $ children  : list()</span>
 <span class="c1">#&gt;  $ dictionary: NULL</span>
 <span class="nf">as_nanoarrow_schema</span><span class="p">(</span><span class="n">arrow</span><span class="o">::</span><span class="nf">schema</span><span class="p">(</span><span class="n">col1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">arrow</span><span class="o">::</span><span class="nf">float64</span><span class="p">()))</span>
 <span class="c1">#&gt; &lt;nanoarrow_schema struct&gt;</span>
-<span class="c1">#&gt;  $ format    : chr &quot;+s&quot;</span>
-<span class="c1">#&gt;  $ name      : chr &quot;&quot;</span>
+<span class="c1">#&gt;  $ format    : chr "+s"</span>
+<span class="c1">#&gt;  $ name      : chr ""</span>
 <span class="c1">#&gt;  $ metadata  : list()</span>
 <span class="c1">#&gt;  $ flags     : int 0</span>
 <span class="c1">#&gt;  $ children  :List of 1</span>
 <span class="c1">#&gt;   ..$ col1:&lt;nanoarrow_schema double&gt;</span>
-<span class="c1">#&gt;   .. ..$ format    : chr &quot;g&quot;</span>
-<span class="c1">#&gt;   .. ..$ name      : chr &quot;col1&quot;</span>
+<span class="c1">#&gt;   .. ..$ format    : chr "g"</span>
+<span class="c1">#&gt;   .. ..$ name      : chr "col1"</span>
 <span class="c1">#&gt;   .. ..$ metadata  : list()</span>
 <span class="c1">#&gt;   .. ..$ flags     : int 2</span>
 <span class="c1">#&gt;   .. ..$ children  : list()</span>
@@ -477,8 +477,8 @@ arrow R package <code class="docutils literal notranslate"><span class="pre">Dat
 <span class="c1">#&gt;  $ dictionary: NULL</span>
 <span class="nf">na_int64</span><span class="p">()</span>
 <span class="c1">#&gt; &lt;nanoarrow_schema int64&gt;</span>
-<span class="c1">#&gt;  $ format    : chr &quot;l&quot;</span>
-<span class="c1">#&gt;  $ name      : chr &quot;&quot;</span>
+<span class="c1">#&gt;  $ format    : chr "l"</span>
+<span class="c1">#&gt;  $ name      : chr ""</span>
 <span class="c1">#&gt;  $ metadata  : list()</span>
 <span class="c1">#&gt;  $ flags     : int 2</span>
 <span class="c1">#&gt;  $ children  : list()</span>
@@ -534,14 +534,14 @@ ArrowSchema, at the R level we attach a schema wherever possible. You
 can access the attached schema using <code class="docutils literal notranslate"><span class="pre">infer_nanoarrow_schema()</span></code>:</p>
 <div class="highlight-r notranslate"><div class="highlight"><pre><span></span><span class="nf">infer_nanoarrow_schema</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
 <span class="c1">#&gt; &lt;nanoarrow_schema struct&gt;</span>
-<span class="c1">#&gt;  $ format    : chr &quot;+s&quot;</span>
-<span class="c1">#&gt;  $ name      : chr &quot;&quot;</span>
+<span class="c1">#&gt;  $ format    : chr "+s"</span>
+<span class="c1">#&gt;  $ name      : chr ""</span>
 <span class="c1">#&gt;  $ metadata  : list()</span>
 <span class="c1">#&gt;  $ flags     : int 0</span>
 <span class="c1">#&gt;  $ children  :List of 1</span>
 <span class="c1">#&gt;   ..$ col1:&lt;nanoarrow_schema double&gt;</span>
-<span class="c1">#&gt;   .. ..$ format    : chr &quot;g&quot;</span>
-<span class="c1">#&gt;   .. ..$ name      : chr &quot;col1&quot;</span>
+<span class="c1">#&gt;   .. ..$ format    : chr "g"</span>
+<span class="c1">#&gt;   .. ..$ name      : chr "col1"</span>
 <span class="c1">#&gt;   .. ..$ metadata  : list()</span>
 <span class="c1">#&gt;   .. ..$ flags     : int 2</span>
 <span class="c1">#&gt;   .. ..$ children  : list()</span>

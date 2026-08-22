@@ -507,11 +507,11 @@ necessarily been resolved yet.</p>
 <a class="reference external" href="https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc">Arrow
 IPC</a>
 reader:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">url</span> <span class="o">=</span> <span class="s2">&quot;https://github.com/apache/arrow-experiments/raw/main/data/arrow-commits/arrow-commits.arrows&quot;</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">url</span> <span class="o">=</span> <span class="s2">"https://github.com/apache/arrow-experiments/raw/main/data/arrow-commits/arrow-commits.arrows"</span>
 <span class="n">na</span><span class="o">.</span><span class="n">ArrayStream</span><span class="o">.</span><span class="n">from_url</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
 </pre></div>
 </div>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">nanoarrow</span><span class="o">.</span><span class="n">ArrayStream</span><span class="o">&lt;</span><span class="n">non</span><span class="o">-</span><span class="n">nullable</span> <span class="n">struct</span><span class="o">&lt;</span><span class="n">commit</span><span class="p">:</span> <span class="n">string</span><span class="p">,</span> <span class="n">time</span><span class="p">:</span> <span class="n">timestamp</span><span class="p">(</span><span class="s1">&#39;us&#39;</span><span class="p">,</span> <span class="s1">&#39;UTC&#39;</span><span class="p">),</span> <span class="n">files</span><span class="p">:</span> <span class="n">int3</span><span class="o">...&gt;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">nanoarrow</span><span class="o">.</span><span class="n">ArrayStream</span><span class="o">&lt;</span><span class="n">non</span><span class="o">-</span><span class="n">nullable</span> <span class="n">struct</span><span class="o">&lt;</span><span class="n">commit</span><span class="p">:</span> <span class="n">string</span><span class="p">,</span> <span class="n">time</span><span class="p">:</span> <span class="n">timestamp</span><span class="p">(</span><span class="s1">'us'</span><span class="p">,</span> <span class="s1">'UTC'</span><span class="p">),</span> <span class="n">files</span><span class="p">:</span> <span class="n">int3</span><span class="o">...&gt;</span>
 </pre></div>
 </div>
 <p>These objects implement the <a class="reference external" href="https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html">Arrow PyCapsule
@@ -588,8 +588,8 @@ Interface</a>
 </pre></div>
 </div>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">nanoarrow</span><span class="o">.</span><span class="n">c_schema</span><span class="o">.</span><span class="n">CSchema</span> <span class="n">decimal128</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span><span class="o">&gt;</span>
-<span class="o">-</span> <span class="nb">format</span><span class="p">:</span> <span class="s1">&#39;d:10,3&#39;</span>
-<span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="s1">&#39;&#39;</span>
+<span class="o">-</span> <span class="nb">format</span><span class="p">:</span> <span class="s1">'d:10,3'</span>
+<span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="s1">''</span>
 <span class="o">-</span> <span class="n">flags</span><span class="p">:</span> <span class="mi">2</span>
 <span class="o">-</span> <span class="n">metadata</span><span class="p">:</span> <span class="n">NULL</span>
 <span class="o">-</span> <span class="n">dictionary</span><span class="p">:</span> <span class="n">NULL</span>
@@ -617,7 +617,7 @@ can be used to interpret its contents. This works for any object
 implementing the <a class="reference external" href="https://arrow.apache.org/docs/format/CDataInterface.html">Arrow PyCapsule
 Interface</a>
 (e.g., <code class="docutils literal notranslate"><span class="pre">pyarrow.Array</span></code>, <code class="docutils literal notranslate"><span class="pre">pyarrow.RecordBatch</span></code>).</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">na</span><span class="o">.</span><span class="n">c_array</span><span class="p">([</span><span class="s2">&quot;one&quot;</span><span class="p">,</span> <span class="s2">&quot;two&quot;</span><span class="p">,</span> <span class="s2">&quot;three&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span> <span class="n">na</span><span class="o">.</span><span class="n">string</span><span class="p">())</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">na</span><span class="o">.</span><span class="n">c_array</span><span class="p">([</span><span class="s2">"one"</span><span class="p">,</span> <span class="s2">"two"</span><span class="p">,</span> <span class="s2">"three"</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span> <span class="n">na</span><span class="o">.</span><span class="n">string</span><span class="p">())</span>
 </pre></div>
 </div>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">nanoarrow</span><span class="o">.</span><span class="n">c_array</span><span class="o">.</span><span class="n">CArray</span> <span class="n">string</span><span class="o">&gt;</span>
@@ -632,11 +632,11 @@ Interface</a>
 <p>Using <code class="docutils literal notranslate"><span class="pre">c_array()</span></code> is a good fit for testing and for ephemeral array
 objects that are being passed from one library to another. For a higher
 level interface, use <code class="docutils literal notranslate"><span class="pre">Array()</span></code>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">array</span> <span class="o">=</span> <span class="n">na</span><span class="o">.</span><span class="n">Array</span><span class="p">([</span><span class="s2">&quot;one&quot;</span><span class="p">,</span> <span class="s2">&quot;two&quot;</span><span class="p">,</span> <span class="s2">&quot;three&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span> <span class="n">na</span><span class="o">.</span><span class="n">string</span><span class="p">())</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">array</span> <span class="o">=</span> <span class="n">na</span><span class="o">.</span><span class="n">Array</span><span class="p">([</span><span class="s2">"one"</span><span class="p">,</span> <span class="s2">"two"</span><span class="p">,</span> <span class="s2">"three"</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span> <span class="n">na</span><span class="o">.</span><span class="n">string</span><span class="p">())</span>
 <span class="n">array</span><span class="o">.</span><span class="n">to_pylist</span><span class="p">()</span>
 </pre></div>
 </div>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="s1">&#39;one&#39;</span><span class="p">,</span> <span class="s1">&#39;two&#39;</span><span class="p">,</span> <span class="s1">&#39;three&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="s1">'one'</span><span class="p">,</span> <span class="s1">'two'</span><span class="p">,</span> <span class="s1">'three'</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
 </pre></div>
 </div>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">array</span><span class="o">.</span><span class="n">buffers</span>
@@ -644,7 +644,7 @@ level interface, use <code class="docutils literal notranslate"><span class="pre
 </div>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">nanoarrow</span><span class="o">.</span><span class="n">c_lib</span><span class="o">.</span><span class="n">CBufferView</span><span class="p">(</span><span class="nb">bool</span><span class="p">[</span><span class="mi">1</span> <span class="n">b</span><span class="p">]</span> <span class="mi">11100000</span><span class="p">),</span>
  <span class="n">nanoarrow</span><span class="o">.</span><span class="n">c_lib</span><span class="o">.</span><span class="n">CBufferView</span><span class="p">(</span><span class="n">int32</span><span class="p">[</span><span class="mi">20</span> <span class="n">b</span><span class="p">]</span> <span class="mi">0</span> <span class="mi">3</span> <span class="mi">6</span> <span class="mi">11</span> <span class="mi">11</span><span class="p">),</span>
- <span class="n">nanoarrow</span><span class="o">.</span><span class="n">c_lib</span><span class="o">.</span><span class="n">CBufferView</span><span class="p">(</span><span class="n">string</span><span class="p">[</span><span class="mi">11</span> <span class="n">b</span><span class="p">]</span> <span class="sa">b</span><span class="s1">&#39;onetwothree&#39;</span><span class="p">))</span>
+ <span class="n">nanoarrow</span><span class="o">.</span><span class="n">c_lib</span><span class="o">.</span><span class="n">CBufferView</span><span class="p">(</span><span class="n">string</span><span class="p">[</span><span class="mi">11</span> <span class="n">b</span><span class="p">]</span> <span class="sa">b</span><span class="s1">'onetwothree'</span><span class="p">))</span>
 </pre></div>
 </div>
 <p>Advanced users can create arrays directly from buffers using
@@ -652,7 +652,7 @@ level interface, use <code class="docutils literal notranslate"><span class="pre
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">na</span><span class="o">.</span><span class="n">c_array_from_buffers</span><span class="p">(</span>
     <span class="n">na</span><span class="o">.</span><span class="n">string</span><span class="p">(),</span>
     <span class="mi">2</span><span class="p">,</span>
-    <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="n">na</span><span class="o">.</span><span class="n">c_buffer</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">6</span><span class="p">],</span> <span class="n">na</span><span class="o">.</span><span class="n">int32</span><span class="p">()),</span> <span class="sa">b</span><span class="s2">&quot;abcdef&quot;</span><span class="p">]</span>
+    <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="n">na</span><span class="o">.</span><span class="n">c_buffer</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">6</span><span class="p">],</span> <span class="n">na</span><span class="o">.</span><span class="n">int32</span><span class="p">()),</span> <span class="sa">b</span><span class="s2">"abcdef"</span><span class="p">]</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -674,7 +674,7 @@ representing a sequence of <code class="docutils literal notranslate"><span clas
 object implementing the <a class="reference external" href="https://arrow.apache.org/docs/format/CDataInterface.html">Arrow PyCapsule
 Interface</a>
 (e.g., <code class="docutils literal notranslate"><span class="pre">pyarrow.RecordBatchReader</span></code>, <code class="docutils literal notranslate"><span class="pre">pyarrow.ChunkedArray</span></code>).</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pa_batch</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">record_batch</span><span class="p">({</span><span class="s2">&quot;col1&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]})</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pa_batch</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">record_batch</span><span class="p">({</span><span class="s2">"col1"</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]})</span>
 <span class="n">reader</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">RecordBatchReader</span><span class="o">.</span><span class="n">from_batches</span><span class="p">(</span><span class="n">pa_batch</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span> <span class="p">[</span><span class="n">pa_batch</span><span class="p">])</span>
 <span class="n">array_stream</span> <span class="o">=</span> <span class="n">na</span><span class="o">.</span><span class="n">c_array_stream</span><span class="p">(</span><span class="n">reader</span><span class="p">)</span>
 <span class="n">array_stream</span>
@@ -698,7 +698,7 @@ it like an iterator. The <code class="docutils literal notranslate"><span class=
 <span class="o">-</span> <span class="n">buffers</span><span class="p">:</span> <span class="p">(</span><span class="mi">0</span><span class="p">,)</span>
 <span class="o">-</span> <span class="n">dictionary</span><span class="p">:</span> <span class="n">NULL</span>
 <span class="o">-</span> <span class="n">children</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
-  <span class="s1">&#39;col1&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">nanoarrow</span><span class="o">.</span><span class="n">c_array</span><span class="o">.</span><span class="n">CArray</span> <span class="n">int64</span><span class="o">&gt;</span>
+  <span class="s1">'col1'</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">nanoarrow</span><span class="o">.</span><span class="n">c_array</span><span class="o">.</span><span class="n">CArray</span> <span class="n">int64</span><span class="o">&gt;</span>
     <span class="o">-</span> <span class="n">length</span><span class="p">:</span> <span class="mi">3</span>
     <span class="o">-</span> <span class="n">offset</span><span class="p">:</span> <span class="mi">0</span>
     <span class="o">-</span> <span class="n">null_count</span><span class="p">:</span> <span class="mi">0</span>
@@ -713,9 +713,9 @@ it like an iterator. The <code class="docutils literal notranslate"><span class=
 </pre></div>
 </div>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">nanoarrow</span><span class="o">.</span><span class="n">Array</span><span class="o">&lt;</span><span class="n">non</span><span class="o">-</span><span class="n">nullable</span> <span class="n">struct</span><span class="o">&lt;</span><span class="n">col1</span><span class="p">:</span> <span class="n">int64</span><span class="o">&gt;&gt;</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
-<span class="p">{</span><span class="s1">&#39;col1&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}</span>
-<span class="p">{</span><span class="s1">&#39;col1&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span>
-<span class="p">{</span><span class="s1">&#39;col1&#39;</span><span class="p">:</span> <span class="mi">3</span><span class="p">}</span>
+<span class="p">{</span><span class="s1">'col1'</span><span class="p">:</span> <span class="mi">1</span><span class="p">}</span>
+<span class="p">{</span><span class="s1">'col1'</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span>
+<span class="p">{</span><span class="s1">'col1'</span><span class="p">:</span> <span class="mi">3</span><span class="p">}</span>
 </pre></div>
 </div>
 </section>
@@ -734,7 +734,7 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 </div>
 <p>Tests use <a class="reference external" href="https://docs.pytest.org/">pytest</a>:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># Install dependencies</span>
-pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[test]&quot;</span>
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">".[test]"</span>
 
 <span class="c1"># Run tests</span>
 pytest<span class="w"> </span>-vvx

@@ -454,9 +454,9 @@ imported structure.</p>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">schema</span><span class="o">.</span><span class="n">is_valid</span><span class="p">()</span>
 <span class="go">True</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">schema</span><span class="o">.</span><span class="n">format</span>
-<span class="go">&#39;i&#39;</span>
+<span class="go">'i'</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">schema</span><span class="o">.</span><span class="n">name</span>
-<span class="go">&#39;&#39;</span>
+<span class="go">''</span>
 </pre></div>
 </div>
 </section>
@@ -477,7 +477,7 @@ parameterized types). This wrapper extends that facility to Python.</p>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">schema</span> <span class="o">=</span> <span class="n">na</span><span class="o">.</span><span class="n">c_schema</span><span class="p">(</span><span class="n">pa</span><span class="o">.</span><span class="n">decimal128</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">schema_view</span> <span class="o">=</span> <span class="n">c_schema_view</span><span class="p">(</span><span class="n">schema</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">schema_view</span><span class="o">.</span><span class="n">type</span>
-<span class="go">&#39;decimal128&#39;</span>
+<span class="go">'decimal128'</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">schema_view</span><span class="o">.</span><span class="n">decimal_bitwidth</span>
 <span class="go">128</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">schema_view</span><span class="o">.</span><span class="n">decimal_precision</span>
@@ -683,7 +683,7 @@ this function will construct a <code class="xref py py-class docutils literal no
 <section id="id6">
 <h3>Examples<a class="headerlink" href="#id6" title="Link to this heading">#</a></h3>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">nanoarrow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">na</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">c_array</span> <span class="o">=</span> <span class="n">na</span><span class="o">.</span><span class="n">c_array_from_buffers</span><span class="p">(</span><span class="n">na</span><span class="o">.</span><span class="n">uint8</span><span class="p">(),</span> <span class="mi">5</span><span class="p">,</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;12345&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">c_array</span> <span class="o">=</span> <span class="n">na</span><span class="o">.</span><span class="n">c_array_from_buffers</span><span class="p">(</span><span class="n">na</span><span class="o">.</span><span class="n">uint8</span><span class="p">(),</span> <span class="mi">5</span><span class="p">,</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="sa">b</span><span class="s2">"12345"</span><span class="p">])</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">na</span><span class="o">.</span><span class="n">Array</span><span class="p">(</span><span class="n">c_array</span><span class="p">)</span><span class="o">.</span><span class="n">inspect</span><span class="p">()</span>
 <span class="go">&lt;ArrowArray uint8&gt;</span>
 <span class="go">- length: 5</span>
@@ -716,13 +716,13 @@ IPC). The offset and length of this view are independent of its parent
 <span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">nanoarrow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">na</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">nanoarrow.c_array</span><span class="w"> </span><span class="kn">import</span> <span class="n">c_array_view</span>
 <span class="gp">&gt;&gt;&gt;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">array</span> <span class="o">=</span> <span class="n">na</span><span class="o">.</span><span class="n">c_array</span><span class="p">(</span><span class="n">pa</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="s2">&quot;one&quot;</span><span class="p">,</span> <span class="s2">&quot;two&quot;</span><span class="p">,</span> <span class="s2">&quot;three&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">]))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">array</span> <span class="o">=</span> <span class="n">na</span><span class="o">.</span><span class="n">c_array</span><span class="p">(</span><span class="n">pa</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="s2">"one"</span><span class="p">,</span> <span class="s2">"two"</span><span class="p">,</span> <span class="s2">"three"</span><span class="p">,</span> <span class="kc">None</span><span class="p">]))</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">array_view</span> <span class="o">=</span> <span class="n">c_array_view</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">array_view</span><span class="o">.</span><span class="n">buffer</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
 <span class="go">array([ 0,  3,  6, 11, 11], dtype=int32)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">array_view</span><span class="o">.</span><span class="n">buffer</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
-<span class="go">array([b&#39;o&#39;, b&#39;n&#39;, b&#39;e&#39;, b&#39;t&#39;, b&#39;w&#39;, b&#39;o&#39;, b&#39;t&#39;, b&#39;h&#39;, b&#39;r&#39;, b&#39;e&#39;, b&#39;e&#39;],</span>
-<span class="go">      dtype=&#39;|S1&#39;)</span>
+<span class="go">array([b'o', b'n', b'e', b't', b'w', b'o', b't', b'h', b'r', b'e', b'e'],</span>
+<span class="go">      dtype='|S1')</span>
 </pre></div>
 </div>
 </section>
@@ -740,7 +740,7 @@ IPC). The offset and length of this view are independent of its parent
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pa</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">nanoarrow.c_array_stream</span><span class="w"> </span><span class="kn">import</span> <span class="n">allocate_c_array_stream</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">pa_column</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">pa</span><span class="o">.</span><span class="n">int32</span><span class="p">())</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">pa_batch</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">record_batch</span><span class="p">([</span><span class="n">pa_column</span><span class="p">],</span> <span class="n">names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;col1&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pa_batch</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">record_batch</span><span class="p">([</span><span class="n">pa_column</span><span class="p">],</span> <span class="n">names</span><span class="o">=</span><span class="p">[</span><span class="s2">"col1"</span><span class="p">])</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">pa_reader</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">RecordBatchReader</span><span class="o">.</span><span class="n">from_batches</span><span class="p">(</span><span class="n">pa_batch</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span> <span class="p">[</span><span class="n">pa_batch</span><span class="p">])</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">array_stream</span> <span class="o">=</span> <span class="n">allocate_c_array_stream</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">pa_reader</span><span class="o">.</span><span class="n">_export_to_c</span><span class="p">(</span><span class="n">array_stream</span><span class="o">.</span><span class="n">_addr</span><span class="p">())</span>
@@ -761,20 +761,20 @@ These objects are usually created using <cite>nanoarrow.c_array_stream()</cite>.
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pa</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">nanoarrow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">na</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">pa_column</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">pa</span><span class="o">.</span><span class="n">int32</span><span class="p">())</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">pa_batch</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">record_batch</span><span class="p">([</span><span class="n">pa_column</span><span class="p">],</span> <span class="n">names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;col1&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pa_batch</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">record_batch</span><span class="p">([</span><span class="n">pa_column</span><span class="p">],</span> <span class="n">names</span><span class="o">=</span><span class="p">[</span><span class="s2">"col1"</span><span class="p">])</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">pa_reader</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">RecordBatchReader</span><span class="o">.</span><span class="n">from_batches</span><span class="p">(</span><span class="n">pa_batch</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span> <span class="p">[</span><span class="n">pa_batch</span><span class="p">])</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">array_stream</span> <span class="o">=</span> <span class="n">na</span><span class="o">.</span><span class="n">c_array_stream</span><span class="p">(</span><span class="n">pa_reader</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">array_stream</span><span class="o">.</span><span class="n">get_schema</span><span class="p">()</span>
 <span class="go">&lt;nanoarrow.c_schema.CSchema struct&gt;</span>
-<span class="go">- format: &#39;+s&#39;</span>
-<span class="go">- name: &#39;&#39;</span>
+<span class="go">- format: '+s'</span>
+<span class="go">- name: ''</span>
 <span class="go">- flags: 0</span>
 <span class="go">- metadata: NULL</span>
 <span class="go">- dictionary: NULL</span>
 <span class="go">- children[1]:</span>
-<span class="go">  &#39;col1&#39;: &lt;nanoarrow.c_schema.CSchema int32&gt;</span>
-<span class="go">    - format: &#39;i&#39;</span>
-<span class="go">    - name: &#39;col1&#39;</span>
+<span class="go">  'col1': &lt;nanoarrow.c_schema.CSchema int32&gt;</span>
+<span class="go">    - format: 'i'</span>
+<span class="go">    - name: 'col1'</span>
 <span class="go">    - flags: 2</span>
 <span class="go">    - metadata: NULL</span>
 <span class="go">    - dictionary: NULL</span>

@@ -45,6 +45,7 @@ struct ArrowIpcEncoderPrivate {
   struct ArrowBuffer buffers;
   struct ArrowBuffer nodes;
   int encoding_footer;
+  int dictionary_replacement;
   struct ArrowIpcDictionaryEncodings dictionary_encodings;
   // Metadata to attach to the next encoded Message (in nanoarrow's packed
   // representation), or an empty buffer if the next Message has no metadata.
@@ -65,6 +66,7 @@ ArrowErrorCode ArrowIpcEncoderInit(struct ArrowIpcEncoder* encoder) {
     return ESPIPE;
   }
   private->encoding_footer = 0;
+  private->dictionary_replacement = 0;
   ArrowBufferInit(&private->buffers);
   ArrowBufferInit(&private->nodes);
   ArrowIpcDictionaryEncodingsInit(&private->dictionary_encodings);
@@ -117,6 +119,14 @@ ArrowErrorCode ArrowIpcEncoderSetMessageMetadata(struct ArrowIpcEncoder* encoder
   }
 
   return NANOARROW_OK;
+}
+
+void ArrowIpcEncoderSetDictionaryReplacement(struct ArrowIpcEncoder* encoder,
+                                             char enabled) {
+  NANOARROW_DCHECK(encoder != NULL && encoder->private_data != NULL);
+  struct ArrowIpcEncoderPrivate* private =
+      (struct ArrowIpcEncoderPrivate*)encoder->private_data;
+  private->dictionary_replacement = enabled != 0;
 }
 
 static ArrowErrorCode ArrowIpcEncoderWriteContinuationAndSize(struct ArrowBuffer* out,
@@ -545,7 +555,7 @@ static ArrowErrorCode ArrowIpcEncodeField(
 static ArrowErrorCode ArrowIpcEncodeSchema(
     flatcc_builder_t* builder, const struct ArrowSchema* schema,
     const struct ArrowIpcDictionaryEncodings* dictionary_encodings,
-    struct ArrowError* error) {
+    int dictionary_replacement, struct ArrowError* error) {
   NANOARROW_DCHECK(schema->release != NULL);
 
   if (strcmp(schema->format, "+s") != 0) {
@@ -576,8 +586,13 @@ static ArrowErrorCode ArrowIpcEncodeSchema(
   }
   FLATCC_RETURN_UNLESS_0(Schema_custom_metadata_end(builder), error);
 
-  FLATCC_RETURN_UNLESS_0(Schema_features_start(builder), error);
-  FLATCC_RETURN_UNLESS_0(Schema_features_end(builder), error);
+  if (dictionary_replacement && dictionary_encodings->encodings.size_bytes > 0) {
+    ns(Feature_enum_t) feature = ns(Feature_DICTIONARY_REPLACEMENT);
+    FLATCC_RETURN_UNLESS_0(Schema_features_create(builder, &feature, 1), error);
+  } else {
+    FLATCC_RETURN_UNLESS_0(Schema_features_start(builder), error);
+    FLATCC_RETURN_UNLESS_0(Schema_features_end(builder), error);
+  }
 
   return NANOARROW_OK;
 }
@@ -608,7 +623,8 @@ ArrowErrorCode ArrowIpcEncoderEncodeSchema(struct ArrowIpcEncoder* encoder,
       error);
 
   NANOARROW_RETURN_NOT_OK(
-      ArrowIpcEncodeSchema(builder, schema, &private->dictionary_encodings, error));
+      ArrowIpcEncodeSchema(builder, schema, &private->dictionary_encodings,
+                           private->dictionary_replacement, error));
 
   FLATCC_RETURN_UNLESS_0(Message_header_Schema_end(builder), error);
 
@@ -895,7 +911,8 @@ ArrowErrorCode ArrowIpcEncoderEncodeFooter(struct ArrowIpcEncoder* encoder,
 
   FLATCC_RETURN_UNLESS_0(Footer_schema_start(builder), error);
   NANOARROW_RETURN_NOT_OK(
-      ArrowIpcEncodeSchema(builder, &footer->schema, &footer->dictionaries, error));
+      ArrowIpcEncodeSchema(builder, &footer->schema, &footer->dictionaries,
+                           /*dictionary_replacement=*/0, error));
   FLATCC_RETURN_UNLESS_0(Footer_schema_end(builder), error);
 
   const struct ArrowIpcFileBlock* blocks =

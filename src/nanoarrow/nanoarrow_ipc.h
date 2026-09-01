@@ -92,6 +92,8 @@
   NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowIpcEncoderFinalizeBuffer)
 #define ArrowIpcEncoderSetMessageMetadata \
   NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowIpcEncoderSetMessageMetadata)
+#define ArrowIpcEncoderSetDictionaryReplacement \
+  NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowIpcEncoderSetDictionaryReplacement)
 #define ArrowIpcEncoderEncodeSchema \
   NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowIpcEncoderEncodeSchema)
 #define ArrowIpcEncoderEncodeSimpleRecordBatch \
@@ -868,6 +870,15 @@ NANOARROW_DLL ArrowErrorCode ArrowIpcEncoderFinalizeBuffer(
 NANOARROW_DLL ArrowErrorCode
 ArrowIpcEncoderSetMessageMetadata(struct ArrowIpcEncoder* encoder,
                                   struct ArrowBuffer* metadata, struct ArrowError* error);
+
+/// \brief Declare dictionary replacement support in subsequently encoded schemas
+///
+/// Enable this before encoding the schema of a stream that may contain more than one
+/// non-delta DictionaryBatch with the same dictionary ID. The
+/// DICTIONARY_REPLACEMENT feature is only written if the schema contains at least one
+/// dictionary-encoded field. This option is disabled by default.
+NANOARROW_DLL void ArrowIpcEncoderSetDictionaryReplacement(
+    struct ArrowIpcEncoder* encoder, char enabled);
 
 /// \brief Encode an ArrowSchema
 ///

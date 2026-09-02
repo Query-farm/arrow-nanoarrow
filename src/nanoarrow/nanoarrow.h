@@ -122,6 +122,8 @@
   NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowArraySetValidityBitmap)
 #define ArrowArraySetBuffer NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowArraySetBuffer)
 #define ArrowArrayReserve NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowArrayReserve)
+#define ArrowArrayAppendArrayView \
+  NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowArrayAppendArrayView)
 #define ArrowArrayFinishBuilding \
   NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowArrayFinishBuilding)
 #define ArrowArrayFinishBuildingDefault \
@@ -1031,6 +1033,16 @@ static inline ArrowErrorCode ArrowArrayStartAppending(struct ArrowArray* array);
 /// that occur using the item-wise appenders.
 NANOARROW_DLL ArrowErrorCode ArrowArrayReserve(struct ArrowArray* array,
                                                int64_t additional_size_elements);
+
+/// \brief Append the contents of an ArrowArrayView to an ArrowArray
+///
+/// Appends each logical element of array_view to array. array must have been
+/// initialized with the same storage type and layout as array_view and prepared
+/// using ArrowArrayStartAppending(). Dictionary values referenced by array_view
+/// are not copied. Returns ENOTSUP for unsupported storage types.
+NANOARROW_DLL ArrowErrorCode ArrowArrayAppendArrayView(
+    struct ArrowArray* array, const struct ArrowArrayView* array_view,
+    struct ArrowError* error);
 
 /// \brief Append a null value to an array
 static inline ArrowErrorCode ArrowArrayAppendNull(struct ArrowArray* array, int64_t n);

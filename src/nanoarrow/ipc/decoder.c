@@ -352,9 +352,9 @@ static ArrowErrorCode ArrowIpcDictionaryReplace(struct ArrowIpcDictionary* dicti
   return NANOARROW_OK;
 }
 
-static ArrowErrorCode ArrowIpcArrayAppendElement(
-    struct ArrowArray* dst, const struct ArrowArrayView* src, int64_t i,
-    struct ArrowError* error) {
+static ArrowErrorCode ArrowIpcArrayAppendElement(struct ArrowArray* dst,
+                                                 const struct ArrowArrayView* src,
+                                                 int64_t i, struct ArrowError* error) {
   if (ArrowArrayViewIsNull(src, i)) {
     return ArrowArrayAppendNull(dst, 1);
   }
@@ -435,8 +435,7 @@ static ArrowErrorCode ArrowIpcArrayAppendElement(
       } else if (src->storage_type == NANOARROW_TYPE_LARGE_LIST_VIEW) {
         child_length = src->buffer_views[2].data.as_int64[logical_i];
       } else {
-        child_length =
-            ArrowArrayViewListChildOffset(src, logical_i + 1) - child_offset;
+        child_length = ArrowArrayViewListChildOffset(src, logical_i + 1) - child_offset;
       }
       for (int64_t child_i = 0; child_i < child_length; child_i++) {
         NANOARROW_RETURN_NOT_OK(ArrowIpcArrayAppendElement(
@@ -464,14 +463,11 @@ static ArrowErrorCode ArrowIpcArrayAppendElement(
       if (src->storage_type == NANOARROW_TYPE_DENSE_UNION) {
         _NANOARROW_CHECK_RANGE(dst->children[child_index]->length - 1, 0, INT32_MAX);
         NANOARROW_RETURN_NOT_OK(ArrowBufferAppendInt32(
-            ArrowArrayBuffer(dst, 1),
-            (int32_t)dst->children[child_index]->length - 1));
+            ArrowArrayBuffer(dst, 1), (int32_t)dst->children[child_index]->length - 1));
       } else {
         for (int64_t child_i = 0; child_i < dst->n_children; child_i++) {
-          if (child_i != child_index &&
-              dst->children[child_i]->length == dst->length) {
-            NANOARROW_RETURN_NOT_OK(
-                ArrowArrayAppendEmpty(dst->children[child_i], 1));
+          if (child_i != child_index && dst->children[child_i]->length == dst->length) {
+            NANOARROW_RETURN_NOT_OK(ArrowArrayAppendEmpty(dst->children[child_i], 1));
           }
           if (dst->children[child_i]->length != dst->length + 1) {
             ArrowErrorSet(error,
@@ -499,8 +495,7 @@ ArrowErrorCode ArrowIpcArrayAppendView(struct ArrowArray* dst,
                                        struct ArrowError* error) {
   if (src->storage_type == NANOARROW_TYPE_RUN_END_ENCODED) {
     if (src->offset != 0) {
-      ArrowErrorSet(error,
-                    "Can't concatenate a sliced run-end encoded dictionary delta");
+      ArrowErrorSet(error, "Can't concatenate a sliced run-end encoded dictionary delta");
       return ENOTSUP;
     }
 
@@ -522,8 +517,8 @@ ArrowErrorCode ArrowIpcArrayAppendView(struct ArrowArray* dst,
   return NANOARROW_OK;
 }
 
-static ArrowErrorCode ArrowIpcArraySetDictionaries(
-    struct ArrowArray* dst, const struct ArrowArray* src) {
+static ArrowErrorCode ArrowIpcArraySetDictionaries(struct ArrowArray* dst,
+                                                   const struct ArrowArray* src) {
   if (src->dictionary != NULL) {
     NANOARROW_DCHECK(dst->dictionary != NULL);
     if (dst->dictionary->release != NULL) {
@@ -601,8 +596,8 @@ static ArrowErrorCode ArrowIpcDictionaryAppend(struct ArrowIpcDictionary* dictio
   NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromArrayView(&combined, array_view, error));
   ArrowErrorCode result = ArrowArrayStartAppending(&combined);
   if (result == NANOARROW_OK) {
-    result = ArrowArrayReserve(
-        &combined, dictionary->current_value.length + value->length);
+    result =
+        ArrowArrayReserve(&combined, dictionary->current_value.length + value->length);
   }
   if (result == NANOARROW_OK) {
     result = ArrowArrayViewSetArray(array_view, &dictionary->current_value, error);

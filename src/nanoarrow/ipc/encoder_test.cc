@@ -302,16 +302,15 @@ TEST(NanoarrowIpcTest, NanoarrowIpcEncoderSchemaMessageMetadata) {
 
 TEST(NanoarrowIpcTest, NanoarrowIpcEncoderDictionaryReplacementFeature) {
   nanoarrow::UniqueSchema schema;
-  ASSERT_EQ(ArrowSchemaInitFromType(schema.get(), NANOARROW_TYPE_STRUCT),
-            NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaInitFromType(schema.get(), NANOARROW_TYPE_STRUCT), NANOARROW_OK);
   ASSERT_EQ(ArrowSchemaAllocateChildren(schema.get(), 1), NANOARROW_OK);
   ASSERT_EQ(ArrowSchemaInitFromType(schema->children[0], NANOARROW_TYPE_INT32),
             NANOARROW_OK);
   ASSERT_EQ(ArrowSchemaSetName(schema->children[0], "dict_col"), NANOARROW_OK);
   ASSERT_EQ(ArrowSchemaAllocateDictionary(schema->children[0]), NANOARROW_OK);
-  ASSERT_EQ(ArrowSchemaInitFromType(schema->children[0]->dictionary,
-                                    NANOARROW_TYPE_STRING),
-            NANOARROW_OK);
+  ASSERT_EQ(
+      ArrowSchemaInitFromType(schema->children[0]->dictionary, NANOARROW_TYPE_STRING),
+      NANOARROW_OK);
 
   nanoarrow::ipc::UniqueEncoder encoder;
   ASSERT_EQ(ArrowIpcEncoderInit(encoder.get()), NANOARROW_OK);
@@ -338,8 +337,7 @@ TEST(NanoarrowIpcTest, NanoarrowIpcEncoderDictionaryReplacementFeature) {
 
 TEST(NanoarrowIpcTest, NanoarrowIpcEncoderNestedDictionaryValueSchema) {
   nanoarrow::UniqueSchema schema;
-  ASSERT_EQ(ArrowSchemaInitFromType(schema.get(), NANOARROW_TYPE_STRUCT),
-            NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaInitFromType(schema.get(), NANOARROW_TYPE_STRUCT), NANOARROW_OK);
   ASSERT_EQ(ArrowSchemaAllocateChildren(schema.get(), 1), NANOARROW_OK);
 
   struct ArrowSchema* dictionary_field = schema->children[0];
@@ -349,8 +347,7 @@ TEST(NanoarrowIpcTest, NanoarrowIpcEncoderNestedDictionaryValueSchema) {
   ASSERT_EQ(ArrowSchemaAllocateDictionary(dictionary_field), NANOARROW_OK);
 
   struct ArrowSchema* value_schema = dictionary_field->dictionary;
-  ASSERT_EQ(ArrowSchemaInitFromType(value_schema, NANOARROW_TYPE_STRUCT),
-            NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaInitFromType(value_schema, NANOARROW_TYPE_STRUCT), NANOARROW_OK);
   ASSERT_EQ(ArrowSchemaAllocateChildren(value_schema, 1), NANOARROW_OK);
   ASSERT_EQ(ArrowSchemaInitFromType(value_schema->children[0], NANOARROW_TYPE_STRING),
             NANOARROW_OK);

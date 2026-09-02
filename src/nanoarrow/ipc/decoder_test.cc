@@ -804,9 +804,9 @@ TEST(NanoarrowIpcTest, NanoarrowIpcDecodeDictionaryBatch) {
                 &decoder, body, NANOARROW_VALIDATION_LEVEL_FULL, &dictionaries, &error),
             NANOARROW_OK)
       << error.message;
-  ASSERT_EQ(ArrowIpcDictionariesFindCurrentValue(&dictionaries, 0, &dictionary_value,
-                                                 &error),
-            NANOARROW_OK);
+  ASSERT_EQ(
+      ArrowIpcDictionariesFindCurrentValue(&dictionaries, 0, &dictionary_value, &error),
+      NANOARROW_OK);
   ASSERT_EQ(ArrowArrayViewSetArray(&array_view, dictionary_value, &error), NANOARROW_OK);
   ASSERT_EQ(array_view.length, 6);
   EXPECT_EQ(ArrowArrayViewGetStringUnsafe(&array_view, 0), "zero"_asv);

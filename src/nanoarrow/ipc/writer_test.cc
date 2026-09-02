@@ -289,16 +289,15 @@ TEST(NanoarrowIpcWriter, WriteDictionaryBatch) {
 TEST(NanoarrowIpcWriter, RoundtripDeltaDictionaryStream) {
   struct ArrowError error;
   nanoarrow::UniqueSchema schema;
-  ASSERT_EQ(ArrowSchemaInitFromType(schema.get(), NANOARROW_TYPE_STRUCT),
-            NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaInitFromType(schema.get(), NANOARROW_TYPE_STRUCT), NANOARROW_OK);
   ASSERT_EQ(ArrowSchemaAllocateChildren(schema.get(), 1), NANOARROW_OK);
   ASSERT_EQ(ArrowSchemaInitFromType(schema->children[0], NANOARROW_TYPE_INT32),
             NANOARROW_OK);
   ASSERT_EQ(ArrowSchemaSetName(schema->children[0], "dict_col"), NANOARROW_OK);
   ASSERT_EQ(ArrowSchemaAllocateDictionary(schema->children[0]), NANOARROW_OK);
-  ASSERT_EQ(ArrowSchemaInitFromType(schema->children[0]->dictionary,
-                                    NANOARROW_TYPE_STRING),
-            NANOARROW_OK);
+  ASSERT_EQ(
+      ArrowSchemaInitFromType(schema->children[0]->dictionary, NANOARROW_TYPE_STRING),
+      NANOARROW_OK);
 
   nanoarrow::UniqueSchema values_schema;
   ASSERT_EQ(ArrowSchemaInitFromType(values_schema.get(), NANOARROW_TYPE_STRING),
@@ -326,19 +325,17 @@ TEST(NanoarrowIpcWriter, RoundtripDeltaDictionaryStream) {
   ASSERT_EQ(ArrowArrayInitFromSchema(batch2.get(), schema.get(), &error), NANOARROW_OK);
   ASSERT_EQ(ArrowArrayStartAppending(batch1.get()), NANOARROW_OK);
   ASSERT_EQ(ArrowArrayStartAppending(batch2.get()), NANOARROW_OK);
-  ASSERT_EQ(ArrowArrayAppendString(batch1->children[0]->dictionary,
-                                  ArrowCharView("zero")),
-            NANOARROW_OK);
+  ASSERT_EQ(
+      ArrowArrayAppendString(batch1->children[0]->dictionary, ArrowCharView("zero")),
+      NANOARROW_OK);
   ASSERT_EQ(ArrowArrayAppendInt(batch1->children[0], 0), NANOARROW_OK);
   batch1->length = 1;
-  ASSERT_EQ(ArrowArrayAppendString(batch2->children[0]->dictionary,
-                                  ArrowCharView("zero")),
+  ASSERT_EQ(
+      ArrowArrayAppendString(batch2->children[0]->dictionary, ArrowCharView("zero")),
+      NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendString(batch2->children[0]->dictionary, ArrowCharView("one")),
             NANOARROW_OK);
-  ASSERT_EQ(ArrowArrayAppendString(batch2->children[0]->dictionary,
-                                  ArrowCharView("one")),
-            NANOARROW_OK);
-  ASSERT_EQ(ArrowArrayAppendString(batch2->children[0]->dictionary,
-                                  ArrowCharView("two")),
+  ASSERT_EQ(ArrowArrayAppendString(batch2->children[0]->dictionary, ArrowCharView("two")),
             NANOARROW_OK);
   ASSERT_EQ(ArrowArrayAppendInt(batch2->children[0], 2), NANOARROW_OK);
   batch2->length = 1;
@@ -349,12 +346,12 @@ TEST(NanoarrowIpcWriter, RoundtripDeltaDictionaryStream) {
   nanoarrow::UniqueArrayView delta_values_view;
   nanoarrow::UniqueArrayView batch1_view;
   nanoarrow::UniqueArrayView batch2_view;
-  ASSERT_EQ(ArrowArrayViewInitFromSchema(full_values_view.get(), values_schema.get(),
-                                        &error),
-            NANOARROW_OK);
-  ASSERT_EQ(ArrowArrayViewInitFromSchema(delta_values_view.get(), values_schema.get(),
-                                        &error),
-            NANOARROW_OK);
+  ASSERT_EQ(
+      ArrowArrayViewInitFromSchema(full_values_view.get(), values_schema.get(), &error),
+      NANOARROW_OK);
+  ASSERT_EQ(
+      ArrowArrayViewInitFromSchema(delta_values_view.get(), values_schema.get(), &error),
+      NANOARROW_OK);
   ASSERT_EQ(ArrowArrayViewInitFromSchema(batch1_view.get(), schema.get(), &error),
             NANOARROW_OK);
   ASSERT_EQ(ArrowArrayViewInitFromSchema(batch2_view.get(), schema.get(), &error),
@@ -374,13 +371,13 @@ TEST(NanoarrowIpcWriter, RoundtripDeltaDictionaryStream) {
   nanoarrow::ipc::UniqueWriter writer;
   ASSERT_EQ(ArrowIpcWriterInit(writer.get(), out_stream.get()), NANOARROW_OK);
   ASSERT_EQ(ArrowIpcWriterWriteSchema(writer.get(), schema.get(), &error), NANOARROW_OK);
-  ASSERT_EQ(ArrowIpcWriterWriteDictionaryBatch(
-                writer.get(), 0, /*is_delta=*/0, full_values_view.get(), &error),
+  ASSERT_EQ(ArrowIpcWriterWriteDictionaryBatch(writer.get(), 0, /*is_delta=*/0,
+                                               full_values_view.get(), &error),
             NANOARROW_OK);
   ASSERT_EQ(ArrowIpcWriterWriteArrayView(writer.get(), batch1_view.get(), &error),
             NANOARROW_OK);
-  ASSERT_EQ(ArrowIpcWriterWriteDictionaryBatch(
-                writer.get(), 0, /*is_delta=*/1, delta_values_view.get(), &error),
+  ASSERT_EQ(ArrowIpcWriterWriteDictionaryBatch(writer.get(), 0, /*is_delta=*/1,
+                                               delta_values_view.get(), &error),
             NANOARROW_OK);
   ASSERT_EQ(ArrowIpcWriterWriteArrayView(writer.get(), batch2_view.get(), &error),
             NANOARROW_OK);
@@ -424,9 +421,9 @@ TEST(NanoarrowIpcWriter, RoundtripDeltaDictionaryStream) {
   EXPECT_EQ(roundtrip_batch2->children[0]->dictionary->length, 3);
 
   nanoarrow::UniqueArrayView roundtrip_view2;
-  ASSERT_EQ(ArrowArrayViewInitFromSchema(roundtrip_view2.get(), roundtrip_schema.get(),
-                                        &error),
-            NANOARROW_OK);
+  ASSERT_EQ(
+      ArrowArrayViewInitFromSchema(roundtrip_view2.get(), roundtrip_schema.get(), &error),
+      NANOARROW_OK);
   ASSERT_EQ(ArrowArrayViewSetArray(roundtrip_view2.get(), roundtrip_batch2.get(), &error),
             NANOARROW_OK);
   EXPECT_EQ(ArrowArrayViewGetStringUnsafe(roundtrip_view2->children[0]->dictionary, 2),
@@ -442,18 +439,18 @@ TEST(NanoarrowIpcWriter, RoundtripDeltaDictionaryStream) {
   ASSERT_EQ(ArrowIpcWriterStartFile(file_writer.get(), &error), NANOARROW_OK);
   ASSERT_EQ(ArrowIpcWriterWriteSchema(file_writer.get(), schema.get(), &error),
             NANOARROW_OK);
-  ASSERT_EQ(ArrowIpcWriterWriteDictionaryBatch(
-                file_writer.get(), 0, /*is_delta=*/0, full_values_view.get(), &error),
+  ASSERT_EQ(ArrowIpcWriterWriteDictionaryBatch(file_writer.get(), 0, /*is_delta=*/0,
+                                               full_values_view.get(), &error),
             NANOARROW_OK);
   ASSERT_EQ(ArrowIpcWriterWriteArrayView(file_writer.get(), batch1_view.get(), &error),
             NANOARROW_OK);
-  ASSERT_EQ(ArrowIpcWriterWriteDictionaryBatch(
-                file_writer.get(), 0, /*is_delta=*/1, delta_values_view.get(), &error),
+  ASSERT_EQ(ArrowIpcWriterWriteDictionaryBatch(file_writer.get(), 0, /*is_delta=*/1,
+                                               delta_values_view.get(), &error),
             NANOARROW_OK);
-  EXPECT_EQ(ArrowIpcWriterWriteDictionaryBatch(
-                file_writer.get(), 0, /*is_delta=*/0,
-                batch2_view->children[0]->dictionary, &error),
-            EINVAL);
+  EXPECT_EQ(
+      ArrowIpcWriterWriteDictionaryBatch(file_writer.get(), 0, /*is_delta=*/0,
+                                         batch2_view->children[0]->dictionary, &error),
+      EINVAL);
   ASSERT_EQ(ArrowIpcWriterWriteArrayView(file_writer.get(), batch2_view.get(), &error),
             NANOARROW_OK);
   ASSERT_EQ(ArrowIpcWriterWriteArrayView(file_writer.get(), nullptr, &error),
@@ -483,18 +480,16 @@ struct DeltaDictionaryTypeCase {
   const char* extended_values;
 };
 
-class DeltaDictionaryTypeTest
-    : public ::testing::TestWithParam<DeltaDictionaryTypeCase> {};
+class DeltaDictionaryTypeTest : public ::testing::TestWithParam<DeltaDictionaryTypeCase> {
+};
 
 static void AssertReadsArrowCppDeltaStream(
     const std::shared_ptr<arrow::Array>& dictionary_array1,
     const std::shared_ptr<arrow::Array>& dictionary_array2) {
   auto dictionary_type = dictionary_array1->type();
   auto schema = arrow::schema({arrow::field("dictionary", dictionary_type)});
-  auto expected1 =
-      arrow::RecordBatch::Make(schema, 4, {dictionary_array1});
-  auto expected2 =
-      arrow::RecordBatch::Make(schema, 4, {dictionary_array2});
+  auto expected1 = arrow::RecordBatch::Make(schema, 4, {dictionary_array1});
+  auto expected2 = arrow::RecordBatch::Make(schema, 4, {dictionary_array2});
 
   auto maybe_sink = arrow::io::BufferOutputStream::Create();
   ASSERT_TRUE(maybe_sink.ok()) << maybe_sink.status();
@@ -530,11 +525,9 @@ static void AssertReadsArrowCppDeltaStream(
 
   nanoarrow::UniqueArray roundtrip1;
   nanoarrow::UniqueArray roundtrip2;
-  ASSERT_EQ(ArrowArrayStreamGetNext(reader.get(), roundtrip1.get(), &error),
-            NANOARROW_OK)
+  ASSERT_EQ(ArrowArrayStreamGetNext(reader.get(), roundtrip1.get(), &error), NANOARROW_OK)
       << error.message;
-  ASSERT_EQ(ArrowArrayStreamGetNext(reader.get(), roundtrip2.get(), &error),
-            NANOARROW_OK)
+  ASSERT_EQ(ArrowArrayStreamGetNext(reader.get(), roundtrip2.get(), &error), NANOARROW_OK)
       << error.message;
   auto maybe_roundtrip1 = arrow::ImportRecordBatch(roundtrip1.get(), arrow_schema);
   auto maybe_roundtrip2 = arrow::ImportRecordBatch(roundtrip2.get(), arrow_schema);
@@ -553,8 +546,7 @@ TEST_P(DeltaDictionaryTypeTest, ReadsArrowCppDeltaStream) {
   auto maybe_array2 = arrow::json::DictArrayFromJSONString(
       dictionary_type, "[2, 3, 1, null]", param.extended_values);
   ASSERT_TRUE(maybe_array2.ok()) << maybe_array2.status();
-  AssertReadsArrowCppDeltaStream(maybe_array1.ValueUnsafe(),
-                                 maybe_array2.ValueUnsafe());
+  AssertReadsArrowCppDeltaStream(maybe_array1.ValueUnsafe(), maybe_array2.ValueUnsafe());
 }
 
 TEST(NanoarrowIpcWriter, ReadsArrowCppDenseUnionDictionaryDelta) {
@@ -578,10 +570,8 @@ TEST(NanoarrowIpcWriter, ReadsArrowCppDenseUnionDictionaryDelta) {
   ASSERT_TRUE(maybe_values1.ok()) << maybe_values1.status();
   ASSERT_TRUE(maybe_values2.ok()) << maybe_values2.status();
 
-  auto indices1 =
-      arrow::json::ArrayFromJSONString(arrow::int32(), "[0, 1, null, 0]");
-  auto indices2 =
-      arrow::json::ArrayFromJSONString(arrow::int32(), "[2, 3, 1, null]");
+  auto indices1 = arrow::json::ArrayFromJSONString(arrow::int32(), "[0, 1, null, 0]");
+  auto indices2 = arrow::json::ArrayFromJSONString(arrow::int32(), "[2, 3, 1, null]");
   ASSERT_TRUE(indices1.ok() && indices2.ok());
   auto dictionary_type =
       arrow::dictionary(arrow::int32(), maybe_values1.ValueUnsafe()->type());
@@ -591,8 +581,7 @@ TEST(NanoarrowIpcWriter, ReadsArrowCppDenseUnionDictionaryDelta) {
       dictionary_type, indices2.ValueUnsafe(), maybe_values2.ValueUnsafe());
   ASSERT_TRUE(maybe_array1.ok()) << maybe_array1.status();
   ASSERT_TRUE(maybe_array2.ok()) << maybe_array2.status();
-  AssertReadsArrowCppDeltaStream(maybe_array1.ValueUnsafe(),
-                                 maybe_array2.ValueUnsafe());
+  AssertReadsArrowCppDeltaStream(maybe_array1.ValueUnsafe(), maybe_array2.ValueUnsafe());
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -620,8 +609,7 @@ INSTANTIATE_TEST_SUITE_P(
             "[{\"i\": 1, \"s\": \"one\"}, {\"i\": 2, \"s\": \"two\"}, "
             "{\"i\": 3, \"s\": null}, {\"i\": 4, \"s\": \"four\"}]"},
         DeltaDictionaryTypeCase{arrow::fixed_size_list(arrow::int16(), 2),
-                                "[[1, 2], [3, 4]]",
-                                "[[1, 2], [3, 4], [5, 6], [7, 8]]"}));
+                                "[[1, 2], [3, 4]]", "[[1, 2], [3, 4], [5, 6], [7, 8]]"}));
 #endif
 
 // Build a struct array with a single dictionary-encoded (int32 -> utf8) child.
@@ -660,8 +648,7 @@ static void MakeDictionaryStructArray(struct ArrowArray* array,
 }
 
 static void MakeRunEndDictionaryStructArray(struct ArrowArray* array,
-                                            struct ArrowSchema* schema,
-                                            bool extended) {
+                                            struct ArrowSchema* schema, bool extended) {
   struct ArrowError error;
   ASSERT_EQ(ArrowSchemaInitFromType(schema, NANOARROW_TYPE_STRUCT), NANOARROW_OK);
   ASSERT_EQ(ArrowSchemaAllocateChildren(schema, 1), NANOARROW_OK);
@@ -671,7 +658,7 @@ static void MakeRunEndDictionaryStructArray(struct ArrowArray* array,
   ASSERT_EQ(ArrowSchemaAllocateDictionary(schema->children[0]), NANOARROW_OK);
   ArrowSchemaInit(schema->children[0]->dictionary);
   ASSERT_EQ(ArrowSchemaSetTypeRunEndEncoded(schema->children[0]->dictionary,
-                                           NANOARROW_TYPE_INT32),
+                                            NANOARROW_TYPE_INT32),
             NANOARROW_OK);
   ASSERT_EQ(ArrowSchemaSetType(schema->children[0]->dictionary->children[1],
                                NANOARROW_TYPE_FLOAT),
@@ -917,10 +904,8 @@ TEST(NanoarrowIpcWriter, ReemitsParentWhenNestedDictionaryChanges) {
             NANOARROW_OK)
       << error.message;
 
-  EXPECT_EQ(DecodeDictionaryIds(output.get()),
-            (std::vector<int64_t>{1, 0, 1, 0}));
-  EXPECT_EQ(DecodeDictionaryDeltaFlags(output.get()),
-            (std::vector<int>{0, 0, 0, 0}));
+  EXPECT_EQ(DecodeDictionaryIds(output.get()), (std::vector<int64_t>{1, 0, 1, 0}));
+  EXPECT_EQ(DecodeDictionaryDeltaFlags(output.get()), (std::vector<int>{0, 0, 0, 0}));
 
   struct ArrowIpcInputStream input;
   ASSERT_EQ(ArrowIpcInputStreamInitBuffer(&input, output.get()), NANOARROW_OK);
@@ -1068,13 +1053,13 @@ TEST(NanoarrowIpcWriter, EmitsChangedDictionary) {
 
   nanoarrow::UniqueArrayView roundtrip_view1;
   nanoarrow::UniqueArrayView roundtrip_view2;
-  ASSERT_EQ(ArrowArrayViewInitFromSchema(roundtrip_view1.get(), roundtrip_schema.get(),
-                                        &error),
-            NANOARROW_OK)
+  ASSERT_EQ(
+      ArrowArrayViewInitFromSchema(roundtrip_view1.get(), roundtrip_schema.get(), &error),
+      NANOARROW_OK)
       << error.message;
-  ASSERT_EQ(ArrowArrayViewInitFromSchema(roundtrip_view2.get(), roundtrip_schema.get(),
-                                        &error),
-            NANOARROW_OK)
+  ASSERT_EQ(
+      ArrowArrayViewInitFromSchema(roundtrip_view2.get(), roundtrip_schema.get(), &error),
+      NANOARROW_OK)
       << error.message;
   ASSERT_EQ(ArrowArrayViewSetArray(roundtrip_view1.get(), roundtrip_array1.get(), &error),
             NANOARROW_OK)
@@ -1087,8 +1072,7 @@ TEST(NanoarrowIpcWriter, EmitsChangedDictionary) {
       ArrowArrayViewGetStringUnsafe(roundtrip_view1->children[0]->dictionary, 1);
   struct ArrowStringView replacement_dictionary_value =
       ArrowArrayViewGetStringUnsafe(roundtrip_view2->children[0]->dictionary, 1);
-  EXPECT_EQ(std::string(first_dictionary_value.data,
-                        first_dictionary_value.size_bytes),
+  EXPECT_EQ(std::string(first_dictionary_value.data, first_dictionary_value.size_bytes),
             "bar");
   EXPECT_EQ(std::string(replacement_dictionary_value.data,
                         replacement_dictionary_value.size_bytes),
@@ -1228,8 +1212,7 @@ TEST(NanoarrowIpcWriter, WritesAppendOnlyDictionaryToFile) {
   ASSERT_EQ(ArrowIpcOutputStreamInitBuffer(out_stream.get(), output.get()), NANOARROW_OK);
   nanoarrow::ipc::UniqueWriter writer;
   ASSERT_EQ(ArrowIpcWriterInit(writer.get(), out_stream.get()), NANOARROW_OK);
-  ASSERT_EQ(ArrowIpcWriterStartFile(writer.get(), &error), NANOARROW_OK)
-      << error.message;
+  ASSERT_EQ(ArrowIpcWriterStartFile(writer.get(), &error), NANOARROW_OK) << error.message;
   ASSERT_EQ(ArrowIpcWriterWriteArrayStream(writer.get(), array_stream.get(), &error),
             NANOARROW_OK)
       << error.message;
@@ -1277,8 +1260,7 @@ TEST(NanoarrowIpcWriter, RejectsChangedDictionaryInFile) {
   ASSERT_EQ(ArrowIpcOutputStreamInitBuffer(out_stream.get(), output.get()), NANOARROW_OK);
   nanoarrow::ipc::UniqueWriter writer;
   ASSERT_EQ(ArrowIpcWriterInit(writer.get(), out_stream.get()), NANOARROW_OK);
-  ASSERT_EQ(ArrowIpcWriterStartFile(writer.get(), &error), NANOARROW_OK)
-      << error.message;
+  ASSERT_EQ(ArrowIpcWriterStartFile(writer.get(), &error), NANOARROW_OK) << error.message;
 
   EXPECT_EQ(ArrowIpcWriterWriteArrayStream(writer.get(), array_stream.get(), &error),
             EINVAL);
@@ -1308,15 +1290,13 @@ TEST(NanoarrowIpcWriter, WritesDeltaDictionaryInFile) {
   ASSERT_EQ(ArrowIpcOutputStreamInitBuffer(out_stream.get(), output.get()), NANOARROW_OK);
   nanoarrow::ipc::UniqueWriter writer;
   ASSERT_EQ(ArrowIpcWriterInit(writer.get(), out_stream.get()), NANOARROW_OK);
-  ASSERT_EQ(ArrowIpcWriterStartFile(writer.get(), &error), NANOARROW_OK)
-      << error.message;
+  ASSERT_EQ(ArrowIpcWriterStartFile(writer.get(), &error), NANOARROW_OK) << error.message;
 
-  EXPECT_EQ(ArrowIpcWriterWriteDictionaryBatch(
-                writer.get(), 0, /*is_delta=*/1, values_view.get(), &error),
+  EXPECT_EQ(ArrowIpcWriterWriteDictionaryBatch(writer.get(), 0, /*is_delta=*/1,
+                                               values_view.get(), &error),
             NANOARROW_OK)
       << error.message;
-  auto* private_data =
-      static_cast<struct ArrowIpcWriterPrivate*>(writer->private_data);
+  auto* private_data = static_cast<struct ArrowIpcWriterPrivate*>(writer->private_data);
   EXPECT_EQ(private_data->footer.dictionary_blocks.size_bytes,
             sizeof(struct ArrowIpcFileBlock));
 }

@@ -21,10 +21,14 @@
 
 #if defined(NANOARROW_BUILD_TESTS_WITH_ARROW)
 #include <arrow/array.h>
+#include <arrow/array/builder_binary.h>
+#include <arrow/array/builder_decimal.h>
+#include <arrow/array/builder_nested.h>
+#include <arrow/array/builder_primitive.h>
 #include <arrow/c/bridge.h>
 #include <arrow/io/memory.h>
 #include <arrow/ipc/api.h>
-#include <arrow/json/from_string.h>
+#include <arrow/util/decimal.h>
 #endif
 
 #include "nanoarrow/nanoarrow_ipc.hpp"
@@ -474,14 +478,160 @@ TEST(NanoarrowIpcWriter, RoundtripDeltaDictionaryStream) {
 }
 
 #if defined(NANOARROW_BUILD_TESTS_WITH_ARROW)
-struct DeltaDictionaryTypeCase {
-  std::shared_ptr<arrow::DataType> value_type;
-  const char* initial_values;
-  const char* extended_values;
+enum class DeltaDictionaryValueCase {
+  kBoolean,
+  kInt64,
+  kInt64WithNull,
+  kUInt64,
+  kDouble,
+  kString,
+  kBinary,
+  kDecimal128,
+  kList,
+  kStruct,
+  kFixedSizeList
 };
 
-class DeltaDictionaryTypeTest : public ::testing::TestWithParam<DeltaDictionaryTypeCase> {
-};
+class DeltaDictionaryTypeTest
+    : public ::testing::TestWithParam<DeltaDictionaryValueCase> {};
+
+static std::shared_ptr<arrow::Array> FinishArrowBuilder(arrow::ArrayBuilder* builder) {
+  std::shared_ptr<arrow::Array> out;
+  EXPECT_TRUE(builder->Finish(&out).ok());
+  return out;
+}
+
+static std::shared_ptr<arrow::Array> MakeDeltaDictionaryValues(
+    DeltaDictionaryValueCase value_case) {
+  switch (value_case) {
+    case DeltaDictionaryValueCase::kBoolean: {
+      arrow::BooleanBuilder builder;
+      EXPECT_TRUE(builder.Append(true).ok());
+      EXPECT_TRUE(builder.Append(false).ok());
+      EXPECT_TRUE(builder.Append(true).ok());
+      EXPECT_TRUE(builder.Append(false).ok());
+      return FinishArrowBuilder(&builder);
+    }
+    case DeltaDictionaryValueCase::kInt64:
+    case DeltaDictionaryValueCase::kInt64WithNull: {
+      arrow::Int64Builder builder;
+      EXPECT_TRUE(builder.Append(1).ok());
+      if (value_case == DeltaDictionaryValueCase::kInt64WithNull) {
+        EXPECT_TRUE(builder.AppendNull().ok());
+      } else {
+        EXPECT_TRUE(builder.Append(-2).ok());
+      }
+      EXPECT_TRUE(builder.Append(3).ok());
+      EXPECT_TRUE(builder.Append(4).ok());
+      return FinishArrowBuilder(&builder);
+    }
+    case DeltaDictionaryValueCase::kUInt64: {
+      arrow::UInt64Builder builder;
+      EXPECT_TRUE(builder.Append(1).ok());
+      EXPECT_TRUE(builder.Append(2).ok());
+      EXPECT_TRUE(builder.Append(3).ok());
+      EXPECT_TRUE(builder.Append(4).ok());
+      return FinishArrowBuilder(&builder);
+    }
+    case DeltaDictionaryValueCase::kDouble: {
+      arrow::DoubleBuilder builder;
+      EXPECT_TRUE(builder.Append(1.5).ok());
+      EXPECT_TRUE(builder.Append(-2.25).ok());
+      EXPECT_TRUE(builder.Append(3.5).ok());
+      EXPECT_TRUE(builder.Append(4.75).ok());
+      return FinishArrowBuilder(&builder);
+    }
+    case DeltaDictionaryValueCase::kString: {
+      arrow::StringBuilder builder;
+      EXPECT_TRUE(builder.Append("one", 3).ok());
+      EXPECT_TRUE(builder.Append("two", 3).ok());
+      EXPECT_TRUE(builder.Append("three", 5).ok());
+      EXPECT_TRUE(builder.Append("four", 4).ok());
+      return FinishArrowBuilder(&builder);
+    }
+    case DeltaDictionaryValueCase::kBinary: {
+      arrow::BinaryBuilder builder;
+      EXPECT_TRUE(builder.Append("one", 3).ok());
+      EXPECT_TRUE(builder.Append("two", 3).ok());
+      EXPECT_TRUE(builder.Append("three", 5).ok());
+      EXPECT_TRUE(builder.Append("four", 4).ok());
+      return FinishArrowBuilder(&builder);
+    }
+    case DeltaDictionaryValueCase::kDecimal128: {
+      arrow::Decimal128Builder builder(arrow::decimal128(10, 2));
+      EXPECT_TRUE(builder.Append(arrow::Decimal128(125)).ok());
+      EXPECT_TRUE(builder.Append(arrow::Decimal128(-250)).ok());
+      EXPECT_TRUE(builder.Append(arrow::Decimal128(375)).ok());
+      EXPECT_TRUE(builder.Append(arrow::Decimal128(400)).ok());
+      return FinishArrowBuilder(&builder);
+    }
+    case DeltaDictionaryValueCase::kList: {
+      auto value_builder = std::make_shared<arrow::Int32Builder>();
+      arrow::ListBuilder builder(arrow::default_memory_pool(), value_builder);
+      EXPECT_TRUE(builder.Append().ok());
+      EXPECT_TRUE(value_builder->Append(1).ok());
+      EXPECT_TRUE(value_builder->Append(2).ok());
+      EXPECT_TRUE(builder.Append().ok());
+      EXPECT_TRUE(builder.Append().ok());
+      EXPECT_TRUE(value_builder->Append(3).ok());
+      EXPECT_TRUE(value_builder->AppendNull().ok());
+      EXPECT_TRUE(builder.Append().ok());
+      EXPECT_TRUE(value_builder->Append(4).ok());
+      EXPECT_TRUE(value_builder->Append(5).ok());
+      return FinishArrowBuilder(&builder);
+    }
+    case DeltaDictionaryValueCase::kStruct: {
+      auto int_builder = std::make_shared<arrow::Int32Builder>();
+      auto string_builder = std::make_shared<arrow::StringBuilder>();
+      auto type = arrow::struct_(
+          {arrow::field("i", arrow::int32()), arrow::field("s", arrow::utf8())});
+      arrow::StructBuilder builder(type, arrow::default_memory_pool(),
+                                   {int_builder, string_builder});
+      EXPECT_TRUE(builder.Append().ok());
+      EXPECT_TRUE(int_builder->Append(1).ok());
+      EXPECT_TRUE(string_builder->Append("one", 3).ok());
+      EXPECT_TRUE(builder.Append().ok());
+      EXPECT_TRUE(int_builder->Append(2).ok());
+      EXPECT_TRUE(string_builder->Append("two", 3).ok());
+      EXPECT_TRUE(builder.Append().ok());
+      EXPECT_TRUE(int_builder->Append(3).ok());
+      EXPECT_TRUE(string_builder->AppendNull().ok());
+      EXPECT_TRUE(builder.Append().ok());
+      EXPECT_TRUE(int_builder->Append(4).ok());
+      EXPECT_TRUE(string_builder->Append("four", 4).ok());
+      return FinishArrowBuilder(&builder);
+    }
+    case DeltaDictionaryValueCase::kFixedSizeList: {
+      auto value_builder = std::make_shared<arrow::Int16Builder>();
+      arrow::FixedSizeListBuilder builder(arrow::default_memory_pool(), value_builder, 2);
+      for (int16_t value = 1; value <= 7; value += 2) {
+        EXPECT_TRUE(builder.Append().ok());
+        EXPECT_TRUE(value_builder->Append(value).ok());
+        EXPECT_TRUE(value_builder->Append(value + 1).ok());
+      }
+      return FinishArrowBuilder(&builder);
+    }
+  }
+
+  ADD_FAILURE() << "Unknown dictionary value case";
+  return nullptr;
+}
+
+static std::shared_ptr<arrow::Array> MakeDictionaryIndices(bool extended) {
+  arrow::Int32Builder builder;
+  if (extended) {
+    EXPECT_TRUE(builder.Append(2).ok());
+    EXPECT_TRUE(builder.Append(3).ok());
+    EXPECT_TRUE(builder.Append(1).ok());
+    EXPECT_TRUE(builder.AppendNull().ok());
+  } else {
+    EXPECT_TRUE(builder.Append(0).ok());
+    EXPECT_TRUE(builder.Append(1).ok());
+    EXPECT_TRUE(builder.AppendNull().ok());
+    EXPECT_TRUE(builder.Append(0).ok());
+  }
+  return FinishArrowBuilder(&builder);
+}
 
 static void AssertReadsArrowCppDeltaStream(
     const std::shared_ptr<arrow::Array>& dictionary_array1,
@@ -538,78 +688,66 @@ static void AssertReadsArrowCppDeltaStream(
 }
 
 TEST_P(DeltaDictionaryTypeTest, ReadsArrowCppDeltaStream) {
-  const DeltaDictionaryTypeCase& param = GetParam();
-  auto dictionary_type = arrow::dictionary(arrow::int32(), param.value_type);
-  auto maybe_array1 = arrow::json::DictArrayFromJSONString(
-      dictionary_type, "[0, 1, null, 0]", param.initial_values);
+  auto values2 = MakeDeltaDictionaryValues(GetParam());
+  ASSERT_NE(values2, nullptr);
+  auto values1 = values2->Slice(0, 2);
+  auto dictionary_type = arrow::dictionary(arrow::int32(), values2->type());
+  auto maybe_array1 = arrow::DictionaryArray::FromArrays(
+      dictionary_type, MakeDictionaryIndices(false), values1);
   ASSERT_TRUE(maybe_array1.ok()) << maybe_array1.status();
-  auto maybe_array2 = arrow::json::DictArrayFromJSONString(
-      dictionary_type, "[2, 3, 1, null]", param.extended_values);
+  auto maybe_array2 = arrow::DictionaryArray::FromArrays(
+      dictionary_type, MakeDictionaryIndices(true), values2);
   ASSERT_TRUE(maybe_array2.ok()) << maybe_array2.status();
   AssertReadsArrowCppDeltaStream(maybe_array1.ValueUnsafe(), maybe_array2.ValueUnsafe());
 }
 
 TEST(NanoarrowIpcWriter, ReadsArrowCppDenseUnionDictionaryDelta) {
-  auto type_ids1 = arrow::json::ArrayFromJSONString(arrow::int8(), "[5, 7]");
-  auto type_ids2 = arrow::json::ArrayFromJSONString(arrow::int8(), "[5, 7, 5, 7]");
-  auto offsets1 = arrow::json::ArrayFromJSONString(arrow::int32(), "[0, 0]");
-  auto offsets2 = arrow::json::ArrayFromJSONString(arrow::int32(), "[0, 0, 1, 1]");
-  auto ints1 = arrow::json::ArrayFromJSONString(arrow::int32(), "[1]");
-  auto ints2 = arrow::json::ArrayFromJSONString(arrow::int32(), "[1, 2]");
-  auto strings1 = arrow::json::ArrayFromJSONString(arrow::utf8(), "[\"a\"]");
-  auto strings2 = arrow::json::ArrayFromJSONString(arrow::utf8(), "[\"a\", \"b\"]");
-  ASSERT_TRUE(type_ids1.ok() && type_ids2.ok() && offsets1.ok() && offsets2.ok() &&
-              ints1.ok() && ints2.ok() && strings1.ok() && strings2.ok());
+  arrow::Int8Builder type_ids_builder;
+  arrow::Int32Builder offsets_builder;
+  arrow::Int32Builder ints_builder;
+  arrow::StringBuilder strings_builder;
+  for (int8_t type_id : {5, 7, 5, 7}) {
+    EXPECT_TRUE(type_ids_builder.Append(type_id).ok());
+  }
+  for (int32_t offset : {0, 0, 1, 1}) {
+    EXPECT_TRUE(offsets_builder.Append(offset).ok());
+  }
+  EXPECT_TRUE(ints_builder.Append(1).ok());
+  EXPECT_TRUE(ints_builder.Append(2).ok());
+  EXPECT_TRUE(strings_builder.Append("a", 1).ok());
+  EXPECT_TRUE(strings_builder.Append("b", 1).ok());
 
-  auto maybe_values1 = arrow::DenseUnionArray::Make(
-      *type_ids1.ValueUnsafe(), *offsets1.ValueUnsafe(),
-      {ints1.ValueUnsafe(), strings1.ValueUnsafe()}, {"i", "s"}, {5, 7});
   auto maybe_values2 = arrow::DenseUnionArray::Make(
-      *type_ids2.ValueUnsafe(), *offsets2.ValueUnsafe(),
-      {ints2.ValueUnsafe(), strings2.ValueUnsafe()}, {"i", "s"}, {5, 7});
-  ASSERT_TRUE(maybe_values1.ok()) << maybe_values1.status();
+      *std::static_pointer_cast<arrow::Int8Array>(FinishArrowBuilder(&type_ids_builder)),
+      *std::static_pointer_cast<arrow::Int32Array>(FinishArrowBuilder(&offsets_builder)),
+      {FinishArrowBuilder(&ints_builder), FinishArrowBuilder(&strings_builder)},
+      {"i", "s"}, {5, 7});
   ASSERT_TRUE(maybe_values2.ok()) << maybe_values2.status();
+  auto values2 = maybe_values2.ValueUnsafe();
+  auto values1 = values2->Slice(0, 2);
 
-  auto indices1 = arrow::json::ArrayFromJSONString(arrow::int32(), "[0, 1, null, 0]");
-  auto indices2 = arrow::json::ArrayFromJSONString(arrow::int32(), "[2, 3, 1, null]");
-  ASSERT_TRUE(indices1.ok() && indices2.ok());
-  auto dictionary_type =
-      arrow::dictionary(arrow::int32(), maybe_values1.ValueUnsafe()->type());
+  auto dictionary_type = arrow::dictionary(arrow::int32(), values2->type());
   auto maybe_array1 = arrow::DictionaryArray::FromArrays(
-      dictionary_type, indices1.ValueUnsafe(), maybe_values1.ValueUnsafe());
+      dictionary_type, MakeDictionaryIndices(false), values1);
   auto maybe_array2 = arrow::DictionaryArray::FromArrays(
-      dictionary_type, indices2.ValueUnsafe(), maybe_values2.ValueUnsafe());
+      dictionary_type, MakeDictionaryIndices(true), values2);
   ASSERT_TRUE(maybe_array1.ok()) << maybe_array1.status();
   ASSERT_TRUE(maybe_array2.ok()) << maybe_array2.status();
   AssertReadsArrowCppDeltaStream(maybe_array1.ValueUnsafe(), maybe_array2.ValueUnsafe());
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    NanoarrowIpcWriter, DeltaDictionaryTypeTest,
-    ::testing::Values(
-        DeltaDictionaryTypeCase{arrow::boolean(), "[true, false]",
-                                "[true, false, true, false]"},
-        DeltaDictionaryTypeCase{arrow::int64(), "[1, -2]", "[1, -2, 3, 4]"},
-        DeltaDictionaryTypeCase{arrow::int64(), "[1, null]", "[1, null, 3, 4]"},
-        DeltaDictionaryTypeCase{arrow::uint64(), "[1, 2]", "[1, 2, 3, 4]"},
-        DeltaDictionaryTypeCase{arrow::float64(), "[1.5, -2.25]",
-                                "[1.5, -2.25, 3.5, 4.75]"},
-        DeltaDictionaryTypeCase{arrow::utf8(), "[\"one\", \"two\"]",
-                                "[\"one\", \"two\", \"three\", \"four\"]"},
-        DeltaDictionaryTypeCase{arrow::binary(), "[\"one\", \"two\"]",
-                                "[\"one\", \"two\", \"three\", \"four\"]"},
-        DeltaDictionaryTypeCase{arrow::decimal128(10, 2), "[\"1.25\", \"-2.50\"]",
-                                "[\"1.25\", \"-2.50\", \"3.75\", \"4.00\"]"},
-        DeltaDictionaryTypeCase{arrow::list(arrow::int32()), "[[1, 2], []]",
-                                "[[1, 2], [], [3, null], [4, 5]]"},
-        DeltaDictionaryTypeCase{
-            arrow::struct_({arrow::field("i", arrow::int32()),
-                            arrow::field("s", arrow::utf8())}),
-            "[{\"i\": 1, \"s\": \"one\"}, {\"i\": 2, \"s\": \"two\"}]",
-            "[{\"i\": 1, \"s\": \"one\"}, {\"i\": 2, \"s\": \"two\"}, "
-            "{\"i\": 3, \"s\": null}, {\"i\": 4, \"s\": \"four\"}]"},
-        DeltaDictionaryTypeCase{arrow::fixed_size_list(arrow::int16(), 2),
-                                "[[1, 2], [3, 4]]", "[[1, 2], [3, 4], [5, 6], [7, 8]]"}));
+INSTANTIATE_TEST_SUITE_P(NanoarrowIpcWriter, DeltaDictionaryTypeTest,
+                         ::testing::Values(DeltaDictionaryValueCase::kBoolean,
+                                           DeltaDictionaryValueCase::kInt64,
+                                           DeltaDictionaryValueCase::kInt64WithNull,
+                                           DeltaDictionaryValueCase::kUInt64,
+                                           DeltaDictionaryValueCase::kDouble,
+                                           DeltaDictionaryValueCase::kString,
+                                           DeltaDictionaryValueCase::kBinary,
+                                           DeltaDictionaryValueCase::kDecimal128,
+                                           DeltaDictionaryValueCase::kList,
+                                           DeltaDictionaryValueCase::kStruct,
+                                           DeltaDictionaryValueCase::kFixedSizeList));
 #endif
 
 // Build a struct array with a single dictionary-encoded (int32 -> utf8) child.

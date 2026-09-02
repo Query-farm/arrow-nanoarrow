@@ -813,6 +813,54 @@ TEST(NanoarrowIpcTest, NanoarrowIpcDecodeDictionaryBatch) {
   EXPECT_EQ(ArrowArrayViewGetStringUnsafe(&array_view, 3), "zero"_asv);
   EXPECT_EQ(ArrowArrayViewGetStringUnsafe(&array_view, 5), "two"_asv);
 
+  // Decode two more deltas while no arrays have cloned the dictionary. The decoder
+  // can append into the recovered mutable backing buffers instead of copying the
+  // existing values. After geometric growth on the first append, the values buffer
+  // has enough spare capacity to remain stable on the second.
+  ASSERT_EQ(ArrowIpcDecoderDecodeDictionary(
+                &decoder, body, NANOARROW_VALIDATION_LEVEL_FULL, &dictionaries, &error),
+            NANOARROW_OK)
+      << error.message;
+  ASSERT_EQ(
+      ArrowIpcDictionariesFindCurrentValue(&dictionaries, 0, &dictionary_value, &error),
+      NANOARROW_OK);
+  EXPECT_EQ(dictionary_value->length, 9);
+  const void* values_buffer_before = dictionary_value->buffers[2];
+  ASSERT_EQ(ArrowIpcDecoderDecodeDictionary(
+                &decoder, body, NANOARROW_VALIDATION_LEVEL_FULL, &dictionaries, &error),
+            NANOARROW_OK)
+      << error.message;
+  ASSERT_EQ(
+      ArrowIpcDictionariesFindCurrentValue(&dictionaries, 0, &dictionary_value, &error),
+      NANOARROW_OK);
+  EXPECT_EQ(dictionary_value->length, 12);
+  EXPECT_EQ(dictionary_value->buffers[2], values_buffer_before);
+
+  // Holding a clone forces copy-on-write for the next delta so that the older
+  // dictionary snapshot remains valid and unchanged.
+  struct ArrowArray snapshot;
+  ASSERT_EQ(
+      ArrowArrayCloneShared(const_cast<struct ArrowArray*>(dictionary_value), &snapshot),
+      NANOARROW_OK);
+  const void* snapshot_values_buffer = snapshot.buffers[2];
+  ASSERT_EQ(ArrowIpcDecoderDecodeDictionary(
+                &decoder, body, NANOARROW_VALIDATION_LEVEL_FULL, &dictionaries, &error),
+            NANOARROW_OK)
+      << error.message;
+  ASSERT_EQ(
+      ArrowIpcDictionariesFindCurrentValue(&dictionaries, 0, &dictionary_value, &error),
+      NANOARROW_OK);
+  EXPECT_EQ(dictionary_value->length, 15);
+  EXPECT_NE(dictionary_value->buffers[2], snapshot_values_buffer);
+  EXPECT_EQ(snapshot.length, 12);
+
+  struct ArrowArrayView snapshot_view;
+  ArrowArrayViewInitFromType(&snapshot_view, NANOARROW_TYPE_STRING);
+  ASSERT_EQ(ArrowArrayViewSetArray(&snapshot_view, &snapshot, &error), NANOARROW_OK);
+  EXPECT_EQ(ArrowArrayViewGetStringUnsafe(&snapshot_view, 11), "two"_asv);
+  ArrowArrayViewReset(&snapshot_view);
+  ArrowArrayRelease(&snapshot);
+
   // After all of this, we should be able to actually decode a RecordBatch
   ASSERT_EQ(ArrowIpcDecoderSetSchemaWithDictionaries(&decoder, &schema,
                                                      &dictionary_encodings, &error),
@@ -831,7 +879,7 @@ TEST(NanoarrowIpcTest, NanoarrowIpcDecodeDictionaryBatch) {
       << error.message;
 
   ASSERT_NE(batch_view->children[0]->dictionary, nullptr);
-  ASSERT_EQ(batch_view->children[0]->dictionary->length, 6);
+  ASSERT_EQ(batch_view->children[0]->dictionary->length, 15);
   ASSERT_EQ(ArrowArrayViewGetStringUnsafe(batch_view->children[0]->dictionary, 0),
             "zero"_asv);
 
@@ -843,7 +891,7 @@ TEST(NanoarrowIpcTest, NanoarrowIpcDecodeDictionaryBatch) {
       << error.message;
 
   ASSERT_NE(column_view->dictionary, nullptr);
-  ASSERT_EQ(column_view->dictionary->length, 6);
+  ASSERT_EQ(column_view->dictionary->length, 15);
   ASSERT_EQ(ArrowArrayViewGetStringUnsafe(column_view->dictionary, 0), "zero"_asv);
 
   // Decode the array from the ArrowBufferView
@@ -854,7 +902,7 @@ TEST(NanoarrowIpcTest, NanoarrowIpcDecodeDictionaryBatch) {
             NANOARROW_OK)
       << error.message;
   ASSERT_NE(batch.children[0]->dictionary, nullptr);
-  ASSERT_EQ(batch.children[0]->dictionary->length, 6);
+  ASSERT_EQ(batch.children[0]->dictionary->length, 15);
   ArrowArrayRelease(&batch);
 
   // Decode the array from a shared buffer
@@ -872,7 +920,7 @@ TEST(NanoarrowIpcTest, NanoarrowIpcDecodeDictionaryBatch) {
             NANOARROW_OK)
       << error.message;
   ASSERT_NE(batch.children[0]->dictionary, nullptr);
-  ASSERT_EQ(batch.children[0]->dictionary->length, 6);
+  ASSERT_EQ(batch.children[0]->dictionary->length, 15);
   ArrowArrayRelease(&batch);
   ArrowBufferReset(&record_batch_shared);
 

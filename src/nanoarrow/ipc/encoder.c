@@ -461,6 +461,7 @@ static ArrowErrorCode ArrowIpcEncodeField(
 
   struct ArrowSchemaView schema_view;
   NANOARROW_RETURN_NOT_OK(ArrowSchemaViewInit(&schema_view, schema, error));
+  const struct ArrowSchema* value_schema = schema;
 
   if (schema_view.type == NANOARROW_TYPE_DICTIONARY) {
     const struct ArrowIpcDictionaryEncoding* encoding =
@@ -529,15 +530,16 @@ static ArrowErrorCode ArrowIpcEncodeField(
     // Add the dictionary encoding to the field
     FLATCC_RETURN_UNLESS_0(Field_dictionary_add(builder, dict_encoding_ref), error);
 
-    NANOARROW_RETURN_NOT_OK(ArrowSchemaViewInit(&schema_view, schema->dictionary, error));
+    value_schema = schema->dictionary;
+    NANOARROW_RETURN_NOT_OK(ArrowSchemaViewInit(&schema_view, value_schema, error));
   }
 
   NANOARROW_RETURN_NOT_OK(ArrowIpcEncodeFieldType(builder, &schema_view, error));
 
-  if (schema->n_children != 0) {
+  if (value_schema->n_children != 0) {
     FLATCC_RETURN_UNLESS_0(Field_children_start(builder), error);
     NANOARROW_RETURN_NOT_OK(
-        ArrowIpcEncodeFields(builder, schema, &ns(Field_children_push_start),
+        ArrowIpcEncodeFields(builder, value_schema, &ns(Field_children_push_start),
                              &ns(Field_children_push_end), dictionary_encodings, error));
     FLATCC_RETURN_UNLESS_0(Field_children_end(builder), error);
   }

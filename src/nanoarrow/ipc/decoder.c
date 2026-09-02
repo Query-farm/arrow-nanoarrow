@@ -3032,6 +3032,7 @@ static ArrowErrorCode ArrowIpcDecoderDecodeDictionaryInternal(
   struct ArrowIpcDecoderPrivate* dictionary_decoder_private_data =
       (struct ArrowIpcDecoderPrivate*)dictionary->decoder.private_data;
   dictionary->decoder.message_type = NANOARROW_IPC_MESSAGE_TYPE_RECORD_BATCH;
+  dictionary->decoder.metadata_version = decoder->metadata_version;
   dictionary_decoder_private_data->last_message = record_batch;
   // Transfer the endianness setting so that buffers are byte-swapped if needed
   dictionary_decoder_private_data->endianness = private_data->endianness;

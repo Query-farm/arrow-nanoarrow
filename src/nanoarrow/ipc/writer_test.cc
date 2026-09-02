@@ -21,8 +21,10 @@
 
 #if defined(NANOARROW_BUILD_TESTS_WITH_ARROW)
 #include <arrow/array.h>
+#include <arrow/c/bridge.h>
 #include <arrow/io/memory.h>
 #include <arrow/ipc/api.h>
+#include <arrow/json/from_string.h>
 #endif
 
 #include "nanoarrow/nanoarrow_ipc.hpp"
@@ -469,6 +471,154 @@ TEST(NanoarrowIpcWriter, RoundtripDeltaDictionaryStream) {
   EXPECT_EQ(arrow_file_dictionary2->dictionary()->length(), 3);
 #endif
 }
+
+#if defined(NANOARROW_BUILD_TESTS_WITH_ARROW)
+struct DeltaDictionaryTypeCase {
+  std::shared_ptr<arrow::DataType> value_type;
+  const char* initial_values;
+  const char* extended_values;
+};
+
+class DeltaDictionaryTypeTest
+    : public ::testing::TestWithParam<DeltaDictionaryTypeCase> {};
+
+static void AssertReadsArrowCppDeltaStream(
+    const std::shared_ptr<arrow::Array>& dictionary_array1,
+    const std::shared_ptr<arrow::Array>& dictionary_array2) {
+  auto dictionary_type = dictionary_array1->type();
+  auto schema = arrow::schema({arrow::field("dictionary", dictionary_type)});
+  auto expected1 =
+      arrow::RecordBatch::Make(schema, 4, {dictionary_array1});
+  auto expected2 =
+      arrow::RecordBatch::Make(schema, 4, {dictionary_array2});
+
+  auto maybe_sink = arrow::io::BufferOutputStream::Create();
+  ASSERT_TRUE(maybe_sink.ok()) << maybe_sink.status();
+  auto sink = maybe_sink.ValueUnsafe();
+  auto options = arrow::ipc::IpcWriteOptions::Defaults();
+  options.emit_dictionary_deltas = true;
+  auto maybe_writer = arrow::ipc::MakeStreamWriter(sink, schema, options);
+  ASSERT_TRUE(maybe_writer.ok()) << maybe_writer.status();
+  auto arrow_writer = maybe_writer.ValueUnsafe();
+  ASSERT_TRUE(arrow_writer->WriteRecordBatch(*expected1).ok());
+  ASSERT_TRUE(arrow_writer->WriteRecordBatch(*expected2).ok());
+  ASSERT_TRUE(arrow_writer->Close().ok());
+  auto maybe_buffer = sink->Finish();
+  ASSERT_TRUE(maybe_buffer.ok()) << maybe_buffer.status();
+  auto buffer = maybe_buffer.ValueUnsafe();
+
+  nanoarrow::UniqueBuffer ipc_buffer;
+  ASSERT_EQ(ArrowBufferAppend(ipc_buffer.get(), buffer->data(), buffer->size()),
+            NANOARROW_OK);
+  struct ArrowIpcInputStream input;
+  ASSERT_EQ(ArrowIpcInputStreamInitBuffer(&input, ipc_buffer.get()), NANOARROW_OK);
+  nanoarrow::UniqueArrayStream reader;
+  ASSERT_EQ(ArrowIpcArrayStreamReaderInit(reader.get(), &input, nullptr), NANOARROW_OK);
+
+  struct ArrowError error;
+  nanoarrow::UniqueSchema roundtrip_schema;
+  ASSERT_EQ(ArrowArrayStreamGetSchema(reader.get(), roundtrip_schema.get(), &error),
+            NANOARROW_OK)
+      << error.message;
+  auto maybe_arrow_schema = arrow::ImportSchema(roundtrip_schema.get());
+  ASSERT_TRUE(maybe_arrow_schema.ok()) << maybe_arrow_schema.status();
+  auto arrow_schema = maybe_arrow_schema.ValueUnsafe();
+
+  nanoarrow::UniqueArray roundtrip1;
+  nanoarrow::UniqueArray roundtrip2;
+  ASSERT_EQ(ArrowArrayStreamGetNext(reader.get(), roundtrip1.get(), &error),
+            NANOARROW_OK)
+      << error.message;
+  ASSERT_EQ(ArrowArrayStreamGetNext(reader.get(), roundtrip2.get(), &error),
+            NANOARROW_OK)
+      << error.message;
+  auto maybe_roundtrip1 = arrow::ImportRecordBatch(roundtrip1.get(), arrow_schema);
+  auto maybe_roundtrip2 = arrow::ImportRecordBatch(roundtrip2.get(), arrow_schema);
+  ASSERT_TRUE(maybe_roundtrip1.ok()) << maybe_roundtrip1.status();
+  ASSERT_TRUE(maybe_roundtrip2.ok()) << maybe_roundtrip2.status();
+  EXPECT_TRUE(maybe_roundtrip1.ValueUnsafe()->Equals(*expected1));
+  EXPECT_TRUE(maybe_roundtrip2.ValueUnsafe()->Equals(*expected2));
+}
+
+TEST_P(DeltaDictionaryTypeTest, ReadsArrowCppDeltaStream) {
+  const DeltaDictionaryTypeCase& param = GetParam();
+  auto dictionary_type = arrow::dictionary(arrow::int32(), param.value_type);
+  auto maybe_array1 = arrow::json::DictArrayFromJSONString(
+      dictionary_type, "[0, 1, null, 0]", param.initial_values);
+  ASSERT_TRUE(maybe_array1.ok()) << maybe_array1.status();
+  auto maybe_array2 = arrow::json::DictArrayFromJSONString(
+      dictionary_type, "[2, 3, 1, null]", param.extended_values);
+  ASSERT_TRUE(maybe_array2.ok()) << maybe_array2.status();
+  AssertReadsArrowCppDeltaStream(maybe_array1.ValueUnsafe(),
+                                 maybe_array2.ValueUnsafe());
+}
+
+TEST(NanoarrowIpcWriter, ReadsArrowCppDenseUnionDictionaryDelta) {
+  auto type_ids1 = arrow::json::ArrayFromJSONString(arrow::int8(), "[5, 7]");
+  auto type_ids2 = arrow::json::ArrayFromJSONString(arrow::int8(), "[5, 7, 5, 7]");
+  auto offsets1 = arrow::json::ArrayFromJSONString(arrow::int32(), "[0, 0]");
+  auto offsets2 = arrow::json::ArrayFromJSONString(arrow::int32(), "[0, 0, 1, 1]");
+  auto ints1 = arrow::json::ArrayFromJSONString(arrow::int32(), "[1]");
+  auto ints2 = arrow::json::ArrayFromJSONString(arrow::int32(), "[1, 2]");
+  auto strings1 = arrow::json::ArrayFromJSONString(arrow::utf8(), "[\"a\"]");
+  auto strings2 = arrow::json::ArrayFromJSONString(arrow::utf8(), "[\"a\", \"b\"]");
+  ASSERT_TRUE(type_ids1.ok() && type_ids2.ok() && offsets1.ok() && offsets2.ok() &&
+              ints1.ok() && ints2.ok() && strings1.ok() && strings2.ok());
+
+  auto maybe_values1 = arrow::DenseUnionArray::Make(
+      *type_ids1.ValueUnsafe(), *offsets1.ValueUnsafe(),
+      {ints1.ValueUnsafe(), strings1.ValueUnsafe()}, {"i", "s"}, {5, 7});
+  auto maybe_values2 = arrow::DenseUnionArray::Make(
+      *type_ids2.ValueUnsafe(), *offsets2.ValueUnsafe(),
+      {ints2.ValueUnsafe(), strings2.ValueUnsafe()}, {"i", "s"}, {5, 7});
+  ASSERT_TRUE(maybe_values1.ok()) << maybe_values1.status();
+  ASSERT_TRUE(maybe_values2.ok()) << maybe_values2.status();
+
+  auto indices1 =
+      arrow::json::ArrayFromJSONString(arrow::int32(), "[0, 1, null, 0]");
+  auto indices2 =
+      arrow::json::ArrayFromJSONString(arrow::int32(), "[2, 3, 1, null]");
+  ASSERT_TRUE(indices1.ok() && indices2.ok());
+  auto dictionary_type =
+      arrow::dictionary(arrow::int32(), maybe_values1.ValueUnsafe()->type());
+  auto maybe_array1 = arrow::DictionaryArray::FromArrays(
+      dictionary_type, indices1.ValueUnsafe(), maybe_values1.ValueUnsafe());
+  auto maybe_array2 = arrow::DictionaryArray::FromArrays(
+      dictionary_type, indices2.ValueUnsafe(), maybe_values2.ValueUnsafe());
+  ASSERT_TRUE(maybe_array1.ok()) << maybe_array1.status();
+  ASSERT_TRUE(maybe_array2.ok()) << maybe_array2.status();
+  AssertReadsArrowCppDeltaStream(maybe_array1.ValueUnsafe(),
+                                 maybe_array2.ValueUnsafe());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    NanoarrowIpcWriter, DeltaDictionaryTypeTest,
+    ::testing::Values(
+        DeltaDictionaryTypeCase{arrow::boolean(), "[true, false]",
+                                "[true, false, true, false]"},
+        DeltaDictionaryTypeCase{arrow::int64(), "[1, -2]", "[1, -2, 3, 4]"},
+        DeltaDictionaryTypeCase{arrow::int64(), "[1, null]", "[1, null, 3, 4]"},
+        DeltaDictionaryTypeCase{arrow::uint64(), "[1, 2]", "[1, 2, 3, 4]"},
+        DeltaDictionaryTypeCase{arrow::float64(), "[1.5, -2.25]",
+                                "[1.5, -2.25, 3.5, 4.75]"},
+        DeltaDictionaryTypeCase{arrow::utf8(), "[\"one\", \"two\"]",
+                                "[\"one\", \"two\", \"three\", \"four\"]"},
+        DeltaDictionaryTypeCase{arrow::binary(), "[\"one\", \"two\"]",
+                                "[\"one\", \"two\", \"three\", \"four\"]"},
+        DeltaDictionaryTypeCase{arrow::decimal128(10, 2), "[\"1.25\", \"-2.50\"]",
+                                "[\"1.25\", \"-2.50\", \"3.75\", \"4.00\"]"},
+        DeltaDictionaryTypeCase{arrow::list(arrow::int32()), "[[1, 2], []]",
+                                "[[1, 2], [], [3, null], [4, 5]]"},
+        DeltaDictionaryTypeCase{
+            arrow::struct_({arrow::field("i", arrow::int32()),
+                            arrow::field("s", arrow::utf8())}),
+            "[{\"i\": 1, \"s\": \"one\"}, {\"i\": 2, \"s\": \"two\"}]",
+            "[{\"i\": 1, \"s\": \"one\"}, {\"i\": 2, \"s\": \"two\"}, "
+            "{\"i\": 3, \"s\": null}, {\"i\": 4, \"s\": \"four\"}]"},
+        DeltaDictionaryTypeCase{arrow::fixed_size_list(arrow::int16(), 2),
+                                "[[1, 2], [3, 4]]",
+                                "[[1, 2], [3, 4], [5, 6], [7, 8]]"}));
+#endif
 
 // Build a struct array with a single dictionary-encoded (int32 -> utf8) child.
 static void MakeDictionaryStructArray(struct ArrowArray* array,

@@ -585,3 +585,27 @@ TEST(NanoarrowIpcTest, NanoarrowIpcEncoderDictionaryBatch) {
             NANOARROW_OK);
   EXPECT_EQ(DecodeMessageMetadata(message_buffer.get(), decoder.get()), KeyValues{});
 }
+
+TEST(NanoarrowIpcTest, NanoarrowIpcEncoderRejectsNestedDictionaryBatch) {
+  nanoarrow::UniqueSchema schema;
+  ASSERT_EQ(ArrowSchemaInitFromType(schema.get(), NANOARROW_TYPE_INT32), NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaAllocateDictionary(schema.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaInitFromType(schema->dictionary, NANOARROW_TYPE_STRING),
+            NANOARROW_OK);
+
+  nanoarrow::UniqueArrayView array_view;
+  struct ArrowError error;
+  ASSERT_EQ(ArrowArrayViewInitFromSchema(array_view.get(), schema.get(), &error),
+            NANOARROW_OK)
+      << error.message;
+
+  nanoarrow::ipc::UniqueEncoder encoder;
+  ASSERT_EQ(ArrowIpcEncoderInit(encoder.get()), NANOARROW_OK);
+  nanoarrow::UniqueBuffer body;
+  EXPECT_EQ(ArrowIpcEncoderEncodeSimpleDictionaryBatch(encoder.get(), /*dictionary_id=*/0,
+                                                       /*is_delta=*/0, array_view.get(),
+                                                       body.get(), &error),
+            EINVAL);
+  EXPECT_STREQ(error.message,
+               "DictionaryBatch values array must not itself be dictionary-encoded");
+}

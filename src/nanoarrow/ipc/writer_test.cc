@@ -429,6 +429,45 @@ TEST(NanoarrowIpcWriter, RoundtripDeltaDictionaryStream) {
             NANOARROW_OK);
   EXPECT_EQ(ArrowArrayViewGetStringUnsafe(roundtrip_view2->children[0]->dictionary, 2),
             ArrowCharView("two"));
+
+  // Files permit deltas (applied in footer order), but not replacement batches.
+  nanoarrow::UniqueBuffer file_output;
+  nanoarrow::ipc::UniqueOutputStream file_out_stream;
+  ASSERT_EQ(ArrowIpcOutputStreamInitBuffer(file_out_stream.get(), file_output.get()),
+            NANOARROW_OK);
+  nanoarrow::ipc::UniqueWriter file_writer;
+  ASSERT_EQ(ArrowIpcWriterInit(file_writer.get(), file_out_stream.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterStartFile(file_writer.get(), &error), NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteSchema(file_writer.get(), schema.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteDictionaryBatch(
+                file_writer.get(), 0, /*is_delta=*/0, full_values_view.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteArrayView(file_writer.get(), batch1_view.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteDictionaryBatch(
+                file_writer.get(), 0, /*is_delta=*/1, delta_values_view.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteArrayView(file_writer.get(), batch2_view.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteArrayView(file_writer.get(), nullptr, &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterFinalizeFile(file_writer.get(), &error), NANOARROW_OK)
+      << error.message;
+
+#if defined(NANOARROW_BUILD_TESTS_WITH_ARROW)
+  auto arrow_file_input = std::make_shared<arrow::io::BufferReader>(
+      arrow::Buffer::Wrap(file_output->data, file_output->size_bytes));
+  auto maybe_file_reader = arrow::ipc::RecordBatchFileReader::Open(arrow_file_input);
+  ASSERT_TRUE(maybe_file_reader.ok()) << maybe_file_reader.status();
+  auto arrow_file_reader = maybe_file_reader.ValueUnsafe();
+  ASSERT_EQ(arrow_file_reader->num_record_batches(), 2);
+  auto maybe_file_batch2 = arrow_file_reader->ReadRecordBatch(1);
+  ASSERT_TRUE(maybe_file_batch2.ok()) << maybe_file_batch2.status();
+  auto arrow_file_dictionary2 = std::static_pointer_cast<arrow::DictionaryArray>(
+      maybe_file_batch2.ValueUnsafe()->column(0));
+  EXPECT_EQ(arrow_file_dictionary2->dictionary()->length(), 3);
+#endif
 }
 
 // Build a struct array with a single dictionary-encoded (int32 -> utf8) child.
@@ -818,6 +857,70 @@ TEST(NanoarrowIpcWriter, EmitsChangedDictionary) {
                         replacement_dictionary_value.size_bytes),
             "baz");
 
+}
+
+TEST(NanoarrowIpcWriter, RejectsChangedDictionaryInFile) {
+  struct ArrowError error;
+  nanoarrow::UniqueSchema schema;
+  nanoarrow::UniqueArray array1;
+  MakeDictionaryStructArray(array1.get(), schema.get());
+
+  nanoarrow::UniqueSchema unused_schema;
+  nanoarrow::UniqueArray array2;
+  MakeDictionaryStructArray(array2.get(), unused_schema.get(), "foo", "baz");
+
+  nanoarrow::UniqueArrayStream array_stream;
+  ASSERT_EQ(ArrowBasicArrayStreamInit(array_stream.get(), schema.get(), 2), NANOARROW_OK);
+  ArrowBasicArrayStreamSetArray(array_stream.get(), 0, array1.get());
+  ArrowBasicArrayStreamSetArray(array_stream.get(), 1, array2.get());
+
+  nanoarrow::UniqueBuffer output;
+  nanoarrow::ipc::UniqueOutputStream out_stream;
+  ASSERT_EQ(ArrowIpcOutputStreamInitBuffer(out_stream.get(), output.get()), NANOARROW_OK);
+  nanoarrow::ipc::UniqueWriter writer;
+  ASSERT_EQ(ArrowIpcWriterInit(writer.get(), out_stream.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterStartFile(writer.get(), &error), NANOARROW_OK)
+      << error.message;
+
+  EXPECT_EQ(ArrowIpcWriterWriteArrayStream(writer.get(), array_stream.get(), &error),
+            EINVAL);
+  EXPECT_STREQ(error.message,
+               "Arrow IPC files do not support replacement of dictionary ID 0");
+}
+
+TEST(NanoarrowIpcWriter, WritesDeltaDictionaryInFile) {
+  struct ArrowError error;
+  nanoarrow::UniqueSchema values_schema;
+  ASSERT_EQ(ArrowSchemaInitFromType(values_schema.get(), NANOARROW_TYPE_STRING),
+            NANOARROW_OK);
+  nanoarrow::UniqueArray values;
+  ASSERT_EQ(ArrowArrayInitFromSchema(values.get(), values_schema.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayStartAppending(values.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendString(values.get(), ArrowCharView("delta")), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayFinishBuildingDefault(values.get(), &error), NANOARROW_OK);
+  nanoarrow::UniqueArrayView values_view;
+  ASSERT_EQ(ArrowArrayViewInitFromSchema(values_view.get(), values_schema.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayViewSetArray(values_view.get(), values.get(), &error),
+            NANOARROW_OK);
+
+  nanoarrow::UniqueBuffer output;
+  nanoarrow::ipc::UniqueOutputStream out_stream;
+  ASSERT_EQ(ArrowIpcOutputStreamInitBuffer(out_stream.get(), output.get()), NANOARROW_OK);
+  nanoarrow::ipc::UniqueWriter writer;
+  ASSERT_EQ(ArrowIpcWriterInit(writer.get(), out_stream.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterStartFile(writer.get(), &error), NANOARROW_OK)
+      << error.message;
+
+  EXPECT_EQ(ArrowIpcWriterWriteDictionaryBatch(
+                writer.get(), 0, /*is_delta=*/1, values_view.get(), &error),
+            NANOARROW_OK)
+      << error.message;
+  auto* private_data =
+      static_cast<struct ArrowIpcWriterPrivate*>(writer->private_data);
+  EXPECT_EQ(private_data->footer.dictionary_blocks.size_bytes,
+            sizeof(struct ArrowIpcFileBlock));
 }
 
 // Write a dictionary-encoded stream through the high-level WriteArrayStream path

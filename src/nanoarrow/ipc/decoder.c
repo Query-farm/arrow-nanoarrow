@@ -479,9 +479,9 @@ static ArrowErrorCode ArrowIpcArrayAppendElement(
   }
 }
 
-static ArrowErrorCode ArrowIpcArrayAppendView(struct ArrowArray* dst,
-                                              const struct ArrowArrayView* src,
-                                              struct ArrowError* error) {
+ArrowErrorCode ArrowIpcArrayAppendView(struct ArrowArray* dst,
+                                       const struct ArrowArrayView* src,
+                                       struct ArrowError* error) {
   if (src->storage_type == NANOARROW_TYPE_RUN_END_ENCODED) {
     if (src->offset != 0) {
       ArrowErrorSet(error,

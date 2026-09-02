@@ -27,6 +27,12 @@
 
 #define ns(x) FLATBUFFERS_WRAP_NAMESPACE(org_apache_arrow_flatbuf, x)
 
+// Shared with the dictionary delta decoder. This is an internal IPC utility used to
+// materialize canonical, zero-offset dictionary values.
+ArrowErrorCode ArrowIpcArrayAppendView(struct ArrowArray* dst,
+                                       const struct ArrowArrayView* src,
+                                       struct ArrowError* error);
+
 void ArrowIpcOutputStreamMove(struct ArrowIpcOutputStream* src,
                               struct ArrowIpcOutputStream* dst) {
   NANOARROW_DCHECK(src != NULL && dst != NULL);
@@ -188,8 +194,7 @@ struct ArrowIpcWriterPrivate {
 
 struct ArrowIpcWriterDictionaryCacheEntry {
   int64_t dictionary_id;
-  struct ArrowBuffer metadata;
-  struct ArrowBuffer body;
+  struct ArrowArray values;
 };
 
 #define NANOARROW_IPC_NO_PARENT_DICTIONARY_ID -1
@@ -209,8 +214,9 @@ static void ArrowIpcWriterResetDictionaryCache(
   struct ArrowIpcWriterDictionaryCacheEntry* cached_dictionaries =
       (struct ArrowIpcWriterDictionaryCacheEntry*)private->dictionary_cache.data;
   for (int64_t i = 0; i < n_cached_dictionaries; i++) {
-    ArrowBufferReset(&cached_dictionaries[i].metadata);
-    ArrowBufferReset(&cached_dictionaries[i].body);
+    if (cached_dictionaries[i].values.release != NULL) {
+      ArrowArrayRelease(&cached_dictionaries[i].values);
+    }
   }
   ArrowBufferReset(&private->dictionary_cache);
 }
@@ -392,8 +398,8 @@ static ArrowErrorCode ArrowIpcWriterWriteEncodedDictionaryBatch(
 
 static ArrowErrorCode ArrowIpcWriterWriteDictionaryBatchIfChanged(
     struct ArrowIpcWriter* writer, int64_t dictionary_id,
-    const struct ArrowArrayView* values_view, int force_emit, int* emitted,
-    struct ArrowError* error);
+    const struct ArrowArrayView* values_view, int force_emit, int allow_delta,
+    int* emitted, struct ArrowError* error);
 
 ArrowErrorCode ArrowIpcWriterWriteDictionaryBatch(
     struct ArrowIpcWriter* writer, int64_t dictionary_id, char is_delta,
@@ -405,7 +411,8 @@ ArrowErrorCode ArrowIpcWriterWriteDictionaryBatch(
   if (private->writing_file && !is_delta) {
     int emitted;
     return ArrowIpcWriterWriteDictionaryBatchIfChanged(
-        writer, dictionary_id, values_view, /*force_emit=*/0, &emitted, error);
+        writer, dictionary_id, values_view, /*force_emit=*/0,
+        /*allow_delta=*/0, &emitted, error);
   }
 
   NANOARROW_ASSERT_OK(ArrowBufferResize(&private->buffer, 0, 0));
@@ -420,12 +427,6 @@ ArrowErrorCode ArrowIpcWriterWriteDictionaryBatch(
       error);
 
   return ArrowIpcWriterWriteEncodedDictionaryBatch(writer, error);
-}
-
-static int ArrowIpcWriterBufferEquals(const struct ArrowBuffer* lhs,
-                                      const struct ArrowBuffer* rhs) {
-  return lhs->size_bytes == rhs->size_bytes &&
-         (lhs->size_bytes == 0 || memcmp(lhs->data, rhs->data, lhs->size_bytes) == 0);
 }
 
 static struct ArrowIpcWriterDictionaryCacheEntry* ArrowIpcWriterFindDictionaryCacheEntry(
@@ -444,62 +445,269 @@ static struct ArrowIpcWriterDictionaryCacheEntry* ArrowIpcWriterFindDictionaryCa
   return NULL;
 }
 
+static ArrowErrorCode ArrowIpcWriterArrayViewInitLike(struct ArrowArrayView* out,
+                                                      const struct ArrowArrayView* src) {
+  ArrowArrayViewInitFromType(out, src->storage_type);
+  out->layout = src->layout;
+
+  ArrowErrorCode result = ArrowArrayViewAllocateChildren(out, src->n_children);
+  if (result != NANOARROW_OK) {
+    ArrowArrayViewReset(out);
+    return result;
+  }
+
+  for (int64_t i = 0; i < src->n_children; i++) {
+    result = ArrowIpcWriterArrayViewInitLike(out->children[i], src->children[i]);
+    if (result != NANOARROW_OK) {
+      ArrowArrayViewReset(out);
+      return result;
+    }
+  }
+
+  if (src->dictionary != NULL) {
+    result = ArrowArrayViewAllocateDictionary(out);
+    if (result != NANOARROW_OK) {
+      ArrowArrayViewReset(out);
+      return result;
+    }
+
+    result = ArrowIpcWriterArrayViewInitLike(out->dictionary, src->dictionary);
+    if (result != NANOARROW_OK) {
+      ArrowArrayViewReset(out);
+      return result;
+    }
+  }
+
+  return NANOARROW_OK;
+}
+
+static ArrowErrorCode ArrowIpcWriterMaterializeArrayView(const struct ArrowArrayView* src,
+                                                         int64_t offset, int64_t length,
+                                                         struct ArrowArray* out,
+                                                         struct ArrowError* error) {
+  out->release = NULL;
+  if (offset < 0 || length < 0 || offset > src->length || length > src->length - offset) {
+    ArrowErrorSet(error,
+                  "Invalid dictionary slice [%" PRId64 ", %" PRId64
+                  ") for array of length %" PRId64,
+                  offset, offset + length, src->length);
+    return EINVAL;
+  }
+
+  struct ArrowArrayView slice = *src;
+  slice.offset += offset;
+  slice.length = length;
+  slice.null_count = -1;
+
+  ArrowErrorCode result = ArrowArrayInitFromArrayView(out, src, error);
+  if (result == NANOARROW_OK) {
+    result = ArrowArrayStartAppending(out);
+  }
+  if (result == NANOARROW_OK) {
+    result = ArrowArrayReserve(out, length);
+  }
+  if (result == NANOARROW_OK && src->storage_type == NANOARROW_TYPE_RUN_END_ENCODED) {
+    int64_t logical_offset = src->offset + offset;
+    int64_t logical_end = logical_offset + length;
+    int64_t first_run = -1;
+    int64_t n_runs = 0;
+    for (int64_t i = 0; length > 0 && i < src->children[0]->length; i++) {
+      int64_t run_end = ArrowArrayViewGetIntUnsafe(src->children[0], i);
+      if (run_end <= logical_offset) {
+        continue;
+      }
+
+      int64_t sliced_run_end = run_end < logical_end ? run_end : logical_end;
+      sliced_run_end -= logical_offset;
+      result = ArrowArrayAppendInt(out->children[0], sliced_run_end);
+      if (result != NANOARROW_OK) {
+        break;
+      }
+
+      if (first_run == -1) {
+        first_run = i;
+      }
+      n_runs++;
+      if (run_end >= logical_end) {
+        break;
+      }
+    }
+
+    if (result == NANOARROW_OK && length > 0 && n_runs == 0) {
+      ArrowErrorSet(error, "Run ends do not cover dictionary slice");
+      result = EINVAL;
+    }
+
+    if (result == NANOARROW_OK && n_runs > 0) {
+      struct ArrowArrayView run_values = *src->children[1];
+      run_values.offset += first_run;
+      run_values.length = n_runs;
+      run_values.null_count = -1;
+      result = ArrowIpcArrayAppendView(out->children[1], &run_values, error);
+    }
+    out->length = length;
+  } else if (result == NANOARROW_OK) {
+    result = ArrowIpcArrayAppendView(out, &slice, error);
+  }
+  if (result == NANOARROW_OK) {
+    result = ArrowArrayFinishBuildingDefault(out, error);
+  }
+
+  if (result != NANOARROW_OK && out->release != NULL) {
+    ArrowArrayRelease(out);
+  }
+  return result;
+}
+
+static ArrowErrorCode ArrowIpcWriterCompareMaterializedArrays(
+    const struct ArrowArray* lhs, const struct ArrowArray* rhs,
+    const struct ArrowArrayView* shape, int* out, struct ArrowError* error) {
+  struct ArrowArrayView lhs_view;
+  struct ArrowArrayView rhs_view;
+  ArrowArrayViewInitFromType(&lhs_view, NANOARROW_TYPE_UNINITIALIZED);
+  ArrowArrayViewInitFromType(&rhs_view, NANOARROW_TYPE_UNINITIALIZED);
+
+  ArrowErrorCode result = ArrowIpcWriterArrayViewInitLike(&lhs_view, shape);
+  if (result == NANOARROW_OK) {
+    result = ArrowIpcWriterArrayViewInitLike(&rhs_view, shape);
+  }
+  if (result == NANOARROW_OK) {
+    result = ArrowArrayViewSetArray(&lhs_view, lhs, error);
+  }
+  if (result == NANOARROW_OK) {
+    result = ArrowArrayViewSetArray(&rhs_view, rhs, error);
+  }
+  if (result == NANOARROW_OK) {
+    result = ArrowArrayViewCompare(&lhs_view, &rhs_view, NANOARROW_COMPARE_IDENTICAL, out,
+                                   NULL);
+  }
+
+  ArrowArrayViewReset(&lhs_view);
+  ArrowArrayViewReset(&rhs_view);
+  return result;
+}
+
+static ArrowErrorCode ArrowIpcWriterArrayViewSetMaterialized(
+    struct ArrowArrayView* out, const struct ArrowArrayView* shape,
+    const struct ArrowArray* array, struct ArrowError* error) {
+  ArrowArrayViewInitFromType(out, NANOARROW_TYPE_UNINITIALIZED);
+  NANOARROW_RETURN_NOT_OK(ArrowIpcWriterArrayViewInitLike(out, shape));
+  ArrowErrorCode result = ArrowArrayViewSetArray(out, array, error);
+  if (result != NANOARROW_OK) {
+    ArrowArrayViewReset(out);
+  }
+  return result;
+}
+
 static ArrowErrorCode ArrowIpcWriterWriteDictionaryBatchIfChanged(
     struct ArrowIpcWriter* writer, int64_t dictionary_id,
-    const struct ArrowArrayView* values_view, int force_emit, int* emitted,
-    struct ArrowError* error) {
+    const struct ArrowArrayView* values_view, int force_emit, int allow_delta,
+    int* emitted, struct ArrowError* error) {
   struct ArrowIpcWriterPrivate* private =
       (struct ArrowIpcWriterPrivate*)writer->private_data;
+
+  struct ArrowArray current_values = {.release = NULL};
+  struct ArrowArray prefix_values = {.release = NULL};
+  struct ArrowArray delta_values = {.release = NULL};
+  struct ArrowArrayView encoded_view;
+  ArrowArrayViewInitFromType(&encoded_view, NANOARROW_TYPE_UNINITIALIZED);
+
+  ArrowErrorCode result = ArrowIpcWriterMaterializeArrayView(
+      values_view, 0, values_view->length, &current_values, error);
+  if (result != NANOARROW_OK) {
+    return result;
+  }
+
+  struct ArrowIpcWriterDictionaryCacheEntry* cached =
+      ArrowIpcWriterFindDictionaryCacheEntry(private, dictionary_id);
+  int values_equal = 0;
+  int is_delta = 0;
+  int cached_was_added = 0;
+  const struct ArrowArray* values_to_encode = NULL;
+  if (cached != NULL) {
+    result = ArrowIpcWriterCompareMaterializedArrays(&cached->values, &current_values,
+                                                     values_view, &values_equal, error);
+    if (result != NANOARROW_OK) {
+      goto cleanup;
+    }
+  }
+
+  if (!force_emit && cached != NULL && values_equal) {
+    *emitted = 0;
+    result = NANOARROW_OK;
+    goto cleanup;
+  }
+
+  if (allow_delta && !force_emit && cached != NULL &&
+      current_values.length > cached->values.length) {
+    result = ArrowIpcWriterMaterializeArrayView(values_view, 0, cached->values.length,
+                                                &prefix_values, error);
+    if (result != NANOARROW_OK) {
+      goto cleanup;
+    }
+
+    int prefix_equal = 0;
+    result = ArrowIpcWriterCompareMaterializedArrays(&cached->values, &prefix_values,
+                                                     values_view, &prefix_equal, error);
+    if (result != NANOARROW_OK) {
+      goto cleanup;
+    }
+
+    if (prefix_equal) {
+      result = ArrowIpcWriterMaterializeArrayView(
+          values_view, cached->values.length,
+          current_values.length - cached->values.length, &delta_values, error);
+      if (result != NANOARROW_OK) {
+        goto cleanup;
+      }
+      is_delta = 1;
+    }
+  }
+
+  if (private->writing_file && cached != NULL && !is_delta) {
+    ArrowErrorSet(error,
+                  "Arrow IPC files do not support replacement of dictionary ID %" PRId64,
+                  dictionary_id);
+    result = EINVAL;
+    goto cleanup;
+  }
+
+  values_to_encode = is_delta ? &delta_values : &current_values;
+  result = ArrowIpcWriterArrayViewSetMaterialized(&encoded_view, values_view,
+                                                  values_to_encode, error);
+  if (result != NANOARROW_OK) {
+    goto cleanup;
+  }
 
   NANOARROW_ASSERT_OK(ArrowBufferResize(&private->buffer, 0, 0));
   NANOARROW_ASSERT_OK(ArrowBufferResize(&private->body_buffer, 0, 0));
 
-  NANOARROW_RETURN_NOT_OK(ArrowIpcEncoderEncodeSimpleDictionaryBatch(
-      &private->encoder, dictionary_id, /*is_delta=*/0, values_view,
-      &private->body_buffer, error));
-  NANOARROW_RETURN_NOT_OK_WITH_ERROR(
-      ArrowIpcEncoderFinalizeBuffer(&private->encoder, /*encapsulate=*/1,
-                                    &private->buffer),
-      error);
-
-  struct ArrowIpcWriterDictionaryCacheEntry* cached =
-      ArrowIpcWriterFindDictionaryCacheEntry(private, dictionary_id);
-  if (!force_emit && cached != NULL &&
-      ArrowIpcWriterBufferEquals(&cached->metadata, &private->buffer) &&
-      ArrowIpcWriterBufferEquals(&cached->body, &private->body_buffer)) {
-    ArrowBufferReset(&private->buffer);
-    ArrowBufferReset(&private->body_buffer);
-    *emitted = 0;
-    return NANOARROW_OK;
+  result = ArrowIpcEncoderEncodeSimpleDictionaryBatch(&private->encoder, dictionary_id,
+                                                      is_delta, &encoded_view,
+                                                      &private->body_buffer, error);
+  if (result == NANOARROW_OK) {
+    result = ArrowIpcEncoderFinalizeBuffer(&private->encoder, /*encapsulate=*/1,
+                                           &private->buffer);
+  }
+  if (result != NANOARROW_OK) {
+    goto cleanup;
   }
 
-  if (private->writing_file && cached != NULL) {
-    ArrowErrorSet(error,
-                  "Arrow IPC files do not support replacement of dictionary ID %" PRId64,
-                  dictionary_id);
-    ArrowBufferReset(&private->buffer);
-    ArrowBufferReset(&private->body_buffer);
-    return EINVAL;
-  }
-
-  int cached_was_added = 0;
   if (cached == NULL) {
     struct ArrowIpcWriterDictionaryCacheEntry new_entry = {
         .dictionary_id = dictionary_id,
+        .values = {.release = NULL},
     };
-    ArrowBufferInit(&new_entry.metadata);
-    ArrowBufferInit(&new_entry.body);
-    ArrowErrorCode result =
-        ArrowBufferAppend(&private->dictionary_cache, &new_entry, sizeof(new_entry));
+    result = ArrowBufferAppend(&private->dictionary_cache, &new_entry, sizeof(new_entry));
     if (result != NANOARROW_OK) {
-      return result;
+      goto cleanup;
     }
     cached = ArrowIpcWriterFindDictionaryCacheEntry(private, dictionary_id);
     NANOARROW_DCHECK(cached != NULL);
     cached_was_added = 1;
   }
 
-  ArrowErrorCode result = ArrowIpcWriterWriteEncodedDictionaryBatch(writer, error);
+  result = ArrowIpcWriterWriteEncodedDictionaryBatch(writer, error);
   if (result != NANOARROW_OK) {
     if (cached_was_added) {
       NANOARROW_ASSERT_OK(ArrowBufferResize(
@@ -508,23 +716,35 @@ static ArrowErrorCode ArrowIpcWriterWriteDictionaryBatchIfChanged(
               (int64_t)sizeof(struct ArrowIpcWriterDictionaryCacheEntry),
           /*shrink_to_fit=*/0));
     }
-    return result;
+    goto cleanup;
   }
 
-  ArrowBufferReset(&cached->metadata);
-  ArrowBufferReset(&cached->body);
-  ArrowBufferMove(&private->buffer, &cached->metadata);
-  ArrowBufferMove(&private->body_buffer, &cached->body);
+  if (cached->values.release != NULL) {
+    ArrowArrayRelease(&cached->values);
+  }
+  ArrowArrayMove(&current_values, &cached->values);
   *emitted = 1;
-  return NANOARROW_OK;
+
+cleanup:
+  if (current_values.release != NULL) {
+    ArrowArrayRelease(&current_values);
+  }
+  if (prefix_values.release != NULL) {
+    ArrowArrayRelease(&prefix_values);
+  }
+  if (delta_values.release != NULL) {
+    ArrowArrayRelease(&delta_values);
+  }
+  ArrowArrayViewReset(&encoded_view);
+  return result;
 }
 
 // Walk the array in the same depth-first order the schema encoder uses to assign
 // dictionary ids (see ArrowIpcDictionaryEncodingsAppendSchema): a dictionary-encoded
 // node claims the next id before descending into its children and then its values.
-// Emit a full (non-delta) DictionaryBatch before the first RecordBatch and whenever
-// the serialized dictionary changes. Each array in the input stream carries its own
-// dictionary, but identical dictionaries do not need to be repeated in the IPC stream.
+// Emit a full DictionaryBatch before the first RecordBatch. For later batches, suppress
+// identical dictionaries, emit an append-only suffix as a delta, or emit a replacement
+// in stream mode. Each array in the input stream carries its own dictionary.
 static ArrowErrorCode ArrowIpcWriterCollectDictionariesForArrayView(
     const struct ArrowArrayView* array_view, struct ArrowBuffer* dictionaries,
     int64_t* next_id, int64_t parent_dictionary_id) {
@@ -578,7 +798,7 @@ static ArrowErrorCode ArrowIpcWriterWriteDictionariesForArrayView(
       result = ArrowIpcWriterWriteDictionaryBatchIfChanged(
           writer, dictionary_views[i].dictionary_id,
           dictionary_views[i].values_view, dictionary_views[i].force_emit,
-          &emitted, error);
+          /*allow_delta=*/1, &emitted, error);
       if (result != NANOARROW_OK) {
         break;
       }

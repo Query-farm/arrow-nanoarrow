@@ -37,6 +37,8 @@
 
 #define ns(x) FLATBUFFERS_WRAP_NAMESPACE(org_apache_arrow_flatbuf, x)
 #ifdef NANOARROW_NAMESPACE
+#define ArrowIpcArrayAppendView \
+  NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowIpcArrayAppendView)
 #define ArrowArrayInternalTryUnshare \
   NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowArrayInternalTryUnshare)
 #endif

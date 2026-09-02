@@ -26,6 +26,10 @@
 #include "nanoarrow/nanoarrow_ipc.h"
 
 #define ns(x) FLATBUFFERS_WRAP_NAMESPACE(org_apache_arrow_flatbuf, x)
+#ifdef NANOARROW_NAMESPACE
+#define ArrowIpcArrayAppendView \
+  NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowIpcArrayAppendView)
+#endif
 
 // Shared with the dictionary delta decoder. This is an internal IPC utility used to
 // materialize canonical, zero-offset dictionary values.

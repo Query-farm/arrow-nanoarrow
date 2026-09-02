@@ -624,9 +624,9 @@ ArrowErrorCode ArrowIpcEncoderEncodeSchema(struct ArrowIpcEncoder* encoder,
       ArrowIpcDictionaryEncodingsAppendSchema(&private->dictionary_encodings, schema),
       error);
 
-  NANOARROW_RETURN_NOT_OK(
-      ArrowIpcEncodeSchema(builder, schema, &private->dictionary_encodings,
-                           private->dictionary_replacement, error));
+  NANOARROW_RETURN_NOT_OK(ArrowIpcEncodeSchema(builder, schema,
+                                               &private->dictionary_encodings,
+                                               private->dictionary_replacement, error));
 
   FLATCC_RETURN_UNLESS_0(Message_header_Schema_end(builder), error);
 
@@ -912,9 +912,9 @@ ArrowErrorCode ArrowIpcEncoderEncodeFooter(struct ArrowIpcEncoder* encoder,
   FLATCC_RETURN_UNLESS_0(Footer_version_add(builder, ns(MetadataVersion_V5)), error);
 
   FLATCC_RETURN_UNLESS_0(Footer_schema_start(builder), error);
-  NANOARROW_RETURN_NOT_OK(
-      ArrowIpcEncodeSchema(builder, &footer->schema, &footer->dictionaries,
-                           /*dictionary_replacement=*/0, error));
+  NANOARROW_RETURN_NOT_OK(ArrowIpcEncodeSchema(builder, &footer->schema,
+                                               &footer->dictionaries,
+                                               /*dictionary_replacement=*/0, error));
   FLATCC_RETURN_UNLESS_0(Footer_schema_end(builder), error);
 
   const struct ArrowIpcFileBlock* blocks =

@@ -798,12 +798,20 @@ TEST(NanoarrowIpcTest, NanoarrowIpcDecodeDictionaryBatch) {
   ASSERT_EQ(ArrowArrayViewGetStringUnsafe(&array_view, 1), "one"_asv);
   ASSERT_EQ(ArrowArrayViewGetStringUnsafe(&array_view, 2), "two"_asv);
 
-  // If we try to decode a delta dictionary, we should fail with a reasonable message
+  // A delta dictionary appends its values to the current dictionary
   const_cast<struct ArrowIpcDictionaryBatch*>(decoder.dictionary)->is_delta = 1;
   ASSERT_EQ(ArrowIpcDecoderDecodeDictionary(
                 &decoder, body, NANOARROW_VALIDATION_LEVEL_FULL, &dictionaries, &error),
-            ENOTSUP);
-  ASSERT_STREQ(error.message, "Dictionary concatenation is not yet supported");
+            NANOARROW_OK)
+      << error.message;
+  ASSERT_EQ(ArrowIpcDictionariesFindCurrentValue(&dictionaries, 0, &dictionary_value,
+                                                 &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayViewSetArray(&array_view, dictionary_value, &error), NANOARROW_OK);
+  ASSERT_EQ(array_view.length, 6);
+  EXPECT_EQ(ArrowArrayViewGetStringUnsafe(&array_view, 0), "zero"_asv);
+  EXPECT_EQ(ArrowArrayViewGetStringUnsafe(&array_view, 3), "zero"_asv);
+  EXPECT_EQ(ArrowArrayViewGetStringUnsafe(&array_view, 5), "two"_asv);
 
   // After all of this, we should be able to actually decode a RecordBatch
   ASSERT_EQ(ArrowIpcDecoderSetSchemaWithDictionaries(&decoder, &schema,
@@ -823,7 +831,7 @@ TEST(NanoarrowIpcTest, NanoarrowIpcDecodeDictionaryBatch) {
       << error.message;
 
   ASSERT_NE(batch_view->children[0]->dictionary, nullptr);
-  ASSERT_EQ(batch_view->children[0]->dictionary->length, 3);
+  ASSERT_EQ(batch_view->children[0]->dictionary->length, 6);
   ASSERT_EQ(ArrowArrayViewGetStringUnsafe(batch_view->children[0]->dictionary, 0),
             "zero"_asv);
 
@@ -835,7 +843,7 @@ TEST(NanoarrowIpcTest, NanoarrowIpcDecodeDictionaryBatch) {
       << error.message;
 
   ASSERT_NE(column_view->dictionary, nullptr);
-  ASSERT_EQ(column_view->dictionary->length, 3);
+  ASSERT_EQ(column_view->dictionary->length, 6);
   ASSERT_EQ(ArrowArrayViewGetStringUnsafe(column_view->dictionary, 0), "zero"_asv);
 
   // Decode the array from the ArrowBufferView
@@ -846,7 +854,7 @@ TEST(NanoarrowIpcTest, NanoarrowIpcDecodeDictionaryBatch) {
             NANOARROW_OK)
       << error.message;
   ASSERT_NE(batch.children[0]->dictionary, nullptr);
-  ASSERT_EQ(batch.children[0]->dictionary->length, 3);
+  ASSERT_EQ(batch.children[0]->dictionary->length, 6);
   ArrowArrayRelease(&batch);
 
   // Decode the array from a shared buffer
@@ -864,7 +872,7 @@ TEST(NanoarrowIpcTest, NanoarrowIpcDecodeDictionaryBatch) {
             NANOARROW_OK)
       << error.message;
   ASSERT_NE(batch.children[0]->dictionary, nullptr);
-  ASSERT_EQ(batch.children[0]->dictionary->length, 3);
+  ASSERT_EQ(batch.children[0]->dictionary->length, 6);
   ArrowArrayRelease(&batch);
   ArrowBufferReset(&record_batch_shared);
 

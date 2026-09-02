@@ -284,6 +284,153 @@ TEST(NanoarrowIpcWriter, WriteDictionaryBatch) {
   EXPECT_EQ(p2->footer.dictionary_blocks.size_bytes, sizeof(struct ArrowIpcFileBlock));
 }
 
+TEST(NanoarrowIpcWriter, RoundtripDeltaDictionaryStream) {
+  struct ArrowError error;
+  nanoarrow::UniqueSchema schema;
+  ASSERT_EQ(ArrowSchemaInitFromType(schema.get(), NANOARROW_TYPE_STRUCT),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaAllocateChildren(schema.get(), 1), NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaInitFromType(schema->children[0], NANOARROW_TYPE_INT32),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaSetName(schema->children[0], "dict_col"), NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaAllocateDictionary(schema->children[0]), NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaInitFromType(schema->children[0]->dictionary,
+                                    NANOARROW_TYPE_STRING),
+            NANOARROW_OK);
+
+  nanoarrow::UniqueSchema values_schema;
+  ASSERT_EQ(ArrowSchemaInitFromType(values_schema.get(), NANOARROW_TYPE_STRING),
+            NANOARROW_OK);
+  nanoarrow::UniqueArray full_values;
+  nanoarrow::UniqueArray delta_values;
+  ASSERT_EQ(ArrowArrayInitFromSchema(full_values.get(), values_schema.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayInitFromSchema(delta_values.get(), values_schema.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayStartAppending(full_values.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayStartAppending(delta_values.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendString(full_values.get(), ArrowCharView("zero")),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendString(delta_values.get(), ArrowCharView("one")),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendString(delta_values.get(), ArrowCharView("two")),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayFinishBuildingDefault(full_values.get(), &error), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayFinishBuildingDefault(delta_values.get(), &error), NANOARROW_OK);
+
+  nanoarrow::UniqueArray batch1;
+  nanoarrow::UniqueArray batch2;
+  ASSERT_EQ(ArrowArrayInitFromSchema(batch1.get(), schema.get(), &error), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayInitFromSchema(batch2.get(), schema.get(), &error), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayStartAppending(batch1.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayStartAppending(batch2.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendString(batch1->children[0]->dictionary,
+                                  ArrowCharView("zero")),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendInt(batch1->children[0], 0), NANOARROW_OK);
+  batch1->length = 1;
+  ASSERT_EQ(ArrowArrayAppendString(batch2->children[0]->dictionary,
+                                  ArrowCharView("zero")),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendString(batch2->children[0]->dictionary,
+                                  ArrowCharView("one")),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendString(batch2->children[0]->dictionary,
+                                  ArrowCharView("two")),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendInt(batch2->children[0], 2), NANOARROW_OK);
+  batch2->length = 1;
+  ASSERT_EQ(ArrowArrayFinishBuildingDefault(batch1.get(), &error), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayFinishBuildingDefault(batch2.get(), &error), NANOARROW_OK);
+
+  nanoarrow::UniqueArrayView full_values_view;
+  nanoarrow::UniqueArrayView delta_values_view;
+  nanoarrow::UniqueArrayView batch1_view;
+  nanoarrow::UniqueArrayView batch2_view;
+  ASSERT_EQ(ArrowArrayViewInitFromSchema(full_values_view.get(), values_schema.get(),
+                                        &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayViewInitFromSchema(delta_values_view.get(), values_schema.get(),
+                                        &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayViewInitFromSchema(batch1_view.get(), schema.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayViewInitFromSchema(batch2_view.get(), schema.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayViewSetArray(full_values_view.get(), full_values.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayViewSetArray(delta_values_view.get(), delta_values.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayViewSetArray(batch1_view.get(), batch1.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayViewSetArray(batch2_view.get(), batch2.get(), &error),
+            NANOARROW_OK);
+
+  nanoarrow::UniqueBuffer output;
+  nanoarrow::ipc::UniqueOutputStream out_stream;
+  ASSERT_EQ(ArrowIpcOutputStreamInitBuffer(out_stream.get(), output.get()), NANOARROW_OK);
+  nanoarrow::ipc::UniqueWriter writer;
+  ASSERT_EQ(ArrowIpcWriterInit(writer.get(), out_stream.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteSchema(writer.get(), schema.get(), &error), NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteDictionaryBatch(
+                writer.get(), 0, /*is_delta=*/0, full_values_view.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteArrayView(writer.get(), batch1_view.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteDictionaryBatch(
+                writer.get(), 0, /*is_delta=*/1, delta_values_view.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteArrayView(writer.get(), batch2_view.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteArrayView(writer.get(), nullptr, &error), NANOARROW_OK);
+
+#if defined(NANOARROW_BUILD_TESTS_WITH_ARROW)
+  auto arrow_input = std::make_shared<arrow::io::BufferReader>(
+      arrow::Buffer::Wrap(output->data, output->size_bytes));
+  auto maybe_arrow_reader = arrow::ipc::RecordBatchStreamReader::Open(arrow_input);
+  ASSERT_TRUE(maybe_arrow_reader.ok()) << maybe_arrow_reader.status();
+  auto arrow_reader = maybe_arrow_reader.ValueUnsafe();
+  std::shared_ptr<arrow::RecordBatch> arrow_batch1;
+  std::shared_ptr<arrow::RecordBatch> arrow_batch2;
+  ASSERT_TRUE(arrow_reader->ReadNext(&arrow_batch1).ok());
+  ASSERT_TRUE(arrow_reader->ReadNext(&arrow_batch2).ok());
+  auto arrow_dictionary1 =
+      std::static_pointer_cast<arrow::DictionaryArray>(arrow_batch1->column(0));
+  auto arrow_dictionary2 =
+      std::static_pointer_cast<arrow::DictionaryArray>(arrow_batch2->column(0));
+  EXPECT_EQ(arrow_dictionary1->dictionary()->length(), 1);
+  EXPECT_EQ(arrow_dictionary2->dictionary()->length(), 3);
+#endif
+
+  struct ArrowIpcInputStream input;
+  ASSERT_EQ(ArrowIpcInputStreamInitBuffer(&input, output.get()), NANOARROW_OK);
+  nanoarrow::UniqueArrayStream reader;
+  ASSERT_EQ(ArrowIpcArrayStreamReaderInit(reader.get(), &input, nullptr), NANOARROW_OK);
+  nanoarrow::UniqueSchema roundtrip_schema;
+  ASSERT_EQ(ArrowArrayStreamGetSchema(reader.get(), roundtrip_schema.get(), &error),
+            NANOARROW_OK)
+      << error.message;
+  nanoarrow::UniqueArray roundtrip_batch1;
+  nanoarrow::UniqueArray roundtrip_batch2;
+  ASSERT_EQ(ArrowArrayStreamGetNext(reader.get(), roundtrip_batch1.get(), &error),
+            NANOARROW_OK)
+      << error.message;
+  ASSERT_EQ(ArrowArrayStreamGetNext(reader.get(), roundtrip_batch2.get(), &error),
+            NANOARROW_OK)
+      << error.message;
+  EXPECT_EQ(roundtrip_batch1->children[0]->dictionary->length, 1);
+  EXPECT_EQ(roundtrip_batch2->children[0]->dictionary->length, 3);
+
+  nanoarrow::UniqueArrayView roundtrip_view2;
+  ASSERT_EQ(ArrowArrayViewInitFromSchema(roundtrip_view2.get(), roundtrip_schema.get(),
+                                        &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayViewSetArray(roundtrip_view2.get(), roundtrip_batch2.get(), &error),
+            NANOARROW_OK);
+  EXPECT_EQ(ArrowArrayViewGetStringUnsafe(roundtrip_view2->children[0]->dictionary, 2),
+            ArrowCharView("two"));
+}
+
 // Build a struct array with a single dictionary-encoded (int32 -> utf8) child.
 static void MakeDictionaryStructArray(struct ArrowArray* array,
                                       struct ArrowSchema* schema,

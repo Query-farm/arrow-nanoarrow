@@ -5093,7 +5093,7 @@ static ArrowErrorCode AppendArrayViewForTest(const struct ArrowArrayView* src,
                                              struct ArrowError* error) {
   NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromArrayView(dst, src, error));
   NANOARROW_RETURN_NOT_OK(ArrowArrayStartAppending(dst));
-  NANOARROW_RETURN_NOT_OK(ArrowArrayAppendArrayView(dst, src, error));
+  NANOARROW_RETURN_NOT_OK(ArrowArrayAppendStorageFromArrayView(dst, src, error));
   return ArrowArrayFinishBuildingDefault(dst, error);
 }
 
@@ -5294,8 +5294,8 @@ TEST(ArrayTest, ArrayAppendArrayViewRunEndEncoded) {
   struct ArrowArray dst;
   ASSERT_EQ(ArrowArrayInitFromArrayView(&dst, &src_view, &error), NANOARROW_OK);
   ASSERT_EQ(ArrowArrayStartAppending(&dst), NANOARROW_OK);
-  ASSERT_EQ(ArrowArrayAppendArrayView(&dst, &src_view, &error), NANOARROW_OK);
-  ASSERT_EQ(ArrowArrayAppendArrayView(&dst, &src_view, &error), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendStorageFromArrayView(&dst, &src_view, &error), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendStorageFromArrayView(&dst, &src_view, &error), NANOARROW_OK);
   ASSERT_EQ(ArrowArrayFinishBuildingDefault(&dst, &error), NANOARROW_OK) << error.message;
   EXPECT_EQ(dst.length, 6);
 
@@ -5307,8 +5307,11 @@ TEST(ArrayTest, ArrayAppendArrayViewRunEndEncoded) {
 
   src_view.offset = 1;
   src_view.length = 1;
-  EXPECT_EQ(ArrowArrayAppendArrayView(&dst, &src_view, &error), ENOTSUP);
-  EXPECT_STREQ(error.message, "Can't append a sliced run-end encoded array view");
+  ASSERT_EQ(ArrowArrayAppendStorageFromArrayView(&dst, &src_view, &error), NANOARROW_OK)
+      << error.message;
+  EXPECT_EQ(dst.length, 7);
+  EXPECT_EQ(dst.children[0]->length, 5);
+  EXPECT_EQ(dst.children[1]->length, 5);
 
   ArrowArrayViewReset(&dst_view);
   ArrowArrayRelease(&dst);

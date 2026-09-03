@@ -77,17 +77,8 @@ int ArrowArrayIsInternal(struct ArrowArray* array) {
   return array->release == &ArrowArrayReleaseInternal;
 }
 
-static ArrowErrorCode ArrowArrayAppendArrayViewElement(struct ArrowArray* dst,
-                                                       const struct ArrowArrayView* src,
-                                                       int64_t i,
-                                                       struct ArrowError* error) {
-  if (ArrowArrayViewIsNull(src, i)) {
-    return ArrowArrayAppendNull(dst, 1);
-  }
-
-  switch (src->storage_type) {
-    case NANOARROW_TYPE_NA:
-      return ArrowArrayAppendNull(dst, 1);
+static int ArrowTypeIsSignedInteger(enum ArrowType type) {
+  switch (type) {
     case NANOARROW_TYPE_BOOL:
     case NANOARROW_TYPE_INT8:
     case NANOARROW_TYPE_INT16:
@@ -99,16 +90,31 @@ static ArrowErrorCode ArrowArrayAppendArrayViewElement(struct ArrowArray* dst,
     case NANOARROW_TYPE_TIME32:
     case NANOARROW_TYPE_TIME64:
     case NANOARROW_TYPE_DURATION:
-      return ArrowArrayAppendInt(dst, ArrowArrayViewGetIntUnsafe(src, i));
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+static int ArrowTypeIsUnsignedInteger(enum ArrowType type) {
+  switch (type) {
     case NANOARROW_TYPE_UINT8:
     case NANOARROW_TYPE_UINT16:
     case NANOARROW_TYPE_UINT32:
     case NANOARROW_TYPE_UINT64:
-      return ArrowArrayAppendUInt(dst, ArrowArrayViewGetUIntUnsafe(src, i));
-    case NANOARROW_TYPE_HALF_FLOAT:
-    case NANOARROW_TYPE_FLOAT:
-    case NANOARROW_TYPE_DOUBLE:
-      return ArrowArrayAppendDouble(dst, ArrowArrayViewGetDoubleUnsafe(src, i));
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+static int ArrowTypeIsFloatingPoint(enum ArrowType type) {
+  return type == NANOARROW_TYPE_HALF_FLOAT || type == NANOARROW_TYPE_FLOAT ||
+         type == NANOARROW_TYPE_DOUBLE;
+}
+
+static int ArrowTypeIsBinaryLike(enum ArrowType type) {
+  switch (type) {
     case NANOARROW_TYPE_STRING:
     case NANOARROW_TYPE_BINARY:
     case NANOARROW_TYPE_FIXED_SIZE_BINARY:
@@ -116,14 +122,172 @@ static ArrowErrorCode ArrowArrayAppendArrayViewElement(struct ArrowArray* dst,
     case NANOARROW_TYPE_LARGE_BINARY:
     case NANOARROW_TYPE_BINARY_VIEW:
     case NANOARROW_TYPE_STRING_VIEW:
-      return ArrowArrayAppendBytes(dst, ArrowArrayViewGetBytesUnsafe(src, i));
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+static int ArrowTypeIsListLike(enum ArrowType type) {
+  switch (type) {
+    case NANOARROW_TYPE_LIST:
+    case NANOARROW_TYPE_LARGE_LIST:
+    case NANOARROW_TYPE_MAP:
+    case NANOARROW_TYPE_LIST_VIEW:
+    case NANOARROW_TYPE_LARGE_LIST_VIEW:
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+static int ArrowArrayCanAppendStorageType(enum ArrowType dst_type,
+                                          enum ArrowType src_type) {
+  if (src_type == NANOARROW_TYPE_NA) {
+    return 1;
+  }
+
+  if (ArrowTypeIsSignedInteger(src_type) || ArrowTypeIsUnsignedInteger(src_type)) {
+    return ArrowTypeIsSignedInteger(dst_type) || ArrowTypeIsUnsignedInteger(dst_type) ||
+           ArrowTypeIsFloatingPoint(dst_type);
+  }
+
+  if (ArrowTypeIsFloatingPoint(src_type)) {
+    return ArrowTypeIsFloatingPoint(dst_type);
+  }
+
+  if (ArrowTypeIsBinaryLike(src_type)) {
+    return ArrowTypeIsBinaryLike(dst_type);
+  }
+
+  if (ArrowTypeIsListLike(src_type)) {
+    return ArrowTypeIsListLike(dst_type);
+  }
+
+  return dst_type == src_type;
+}
+
+static ArrowErrorCode ArrowArrayCheckCanAppendStorageFromArrayView(
+    struct ArrowArray* dst, const struct ArrowArrayView* src, struct ArrowError* error) {
+  if (!ArrowArrayIsInternal(dst)) {
+    ArrowErrorSet(error, "Expected destination to be an internal ArrowArray");
+    return EINVAL;
+  }
+
+  struct ArrowArrayPrivateData* private_data =
+      (struct ArrowArrayPrivateData*)dst->private_data;
+  enum ArrowType dst_type = private_data->storage_type;
+  if (!ArrowArrayCanAppendStorageType(dst_type, src->storage_type)) {
+    ArrowErrorSet(error, "Can't append %s storage to an array with %s storage",
+                  ArrowTypeString(src->storage_type), ArrowTypeString(dst_type));
+    return EINVAL;
+  }
+
+  if ((src->dictionary == NULL) != (dst->dictionary == NULL)) {
+    ArrowErrorSet(error,
+                  "Can't append storage when exactly one of source and destination "
+                  "is dictionary-encoded");
+    return EINVAL;
+  }
+
+  if (src->storage_type == NANOARROW_TYPE_NA) {
+    return NANOARROW_OK;
+  }
+
+  if (src->n_children != dst->n_children) {
+    ArrowErrorSet(error,
+                  "Expected source and destination to have the same number of "
+                  "children but found %" PRId64 " and %" PRId64,
+                  src->n_children, dst->n_children);
+    return EINVAL;
+  }
+
+  if (src->storage_type == NANOARROW_TYPE_FIXED_SIZE_LIST &&
+      src->layout.child_size_elements != private_data->layout.child_size_elements) {
+    ArrowErrorSet(error,
+                  "Expected source and destination fixed-size list child sizes to "
+                  "match but found %" PRId64 " and %" PRId64,
+                  src->layout.child_size_elements,
+                  private_data->layout.child_size_elements);
+    return EINVAL;
+  }
+
+  if (src->storage_type == NANOARROW_TYPE_FIXED_SIZE_BINARY &&
+      src->layout.element_size_bits[1] != private_data->layout.element_size_bits[1]) {
+    ArrowErrorSet(error,
+                  "Expected source and destination fixed-size binary widths to "
+                  "match but found %" PRId64 " and %" PRId64 " bits",
+                  src->layout.element_size_bits[1],
+                  private_data->layout.element_size_bits[1]);
+    return EINVAL;
+  }
+
+  for (int64_t i = 0; i < src->n_children; i++) {
+    NANOARROW_RETURN_NOT_OK_WITH_ERROR(ArrowArrayCheckCanAppendStorageFromArrayView(
+                                           dst->children[i], src->children[i], error),
+                                       error);
+  }
+
+  return NANOARROW_OK;
+}
+
+static ArrowErrorCode ArrowArrayAppendStorageFromArrayViewElement(
+    struct ArrowArray* dst, const struct ArrowArrayView* src, int64_t i,
+    struct ArrowError* error) {
+  if (ArrowArrayViewIsNull(src, i)) {
+    NANOARROW_RETURN_NOT_OK_WITH_ERROR(ArrowArrayAppendNull(dst, 1), error);
+    return NANOARROW_OK;
+  }
+
+  switch (src->storage_type) {
+    case NANOARROW_TYPE_NA:
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(ArrowArrayAppendNull(dst, 1), error);
+      return NANOARROW_OK;
+    case NANOARROW_TYPE_BOOL:
+    case NANOARROW_TYPE_INT8:
+    case NANOARROW_TYPE_INT16:
+    case NANOARROW_TYPE_INT32:
+    case NANOARROW_TYPE_INT64:
+    case NANOARROW_TYPE_DATE32:
+    case NANOARROW_TYPE_DATE64:
+    case NANOARROW_TYPE_TIMESTAMP:
+    case NANOARROW_TYPE_TIME32:
+    case NANOARROW_TYPE_TIME64:
+    case NANOARROW_TYPE_DURATION:
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+          ArrowArrayAppendInt(dst, ArrowArrayViewGetIntUnsafe(src, i)), error);
+      return NANOARROW_OK;
+    case NANOARROW_TYPE_UINT8:
+    case NANOARROW_TYPE_UINT16:
+    case NANOARROW_TYPE_UINT32:
+    case NANOARROW_TYPE_UINT64:
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+          ArrowArrayAppendUInt(dst, ArrowArrayViewGetUIntUnsafe(src, i)), error);
+      return NANOARROW_OK;
+    case NANOARROW_TYPE_HALF_FLOAT:
+    case NANOARROW_TYPE_FLOAT:
+    case NANOARROW_TYPE_DOUBLE:
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+          ArrowArrayAppendDouble(dst, ArrowArrayViewGetDoubleUnsafe(src, i)), error);
+      return NANOARROW_OK;
+    case NANOARROW_TYPE_STRING:
+    case NANOARROW_TYPE_BINARY:
+    case NANOARROW_TYPE_FIXED_SIZE_BINARY:
+    case NANOARROW_TYPE_LARGE_STRING:
+    case NANOARROW_TYPE_LARGE_BINARY:
+    case NANOARROW_TYPE_BINARY_VIEW:
+    case NANOARROW_TYPE_STRING_VIEW:
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+          ArrowArrayAppendBytes(dst, ArrowArrayViewGetBytesUnsafe(src, i)), error);
+      return NANOARROW_OK;
     case NANOARROW_TYPE_INTERVAL_MONTHS:
     case NANOARROW_TYPE_INTERVAL_DAY_TIME:
     case NANOARROW_TYPE_INTERVAL_MONTH_DAY_NANO: {
       struct ArrowInterval interval;
       ArrowIntervalInit(&interval, src->storage_type);
       ArrowArrayViewGetIntervalUnsafe(src, i, &interval);
-      return ArrowArrayAppendInterval(dst, &interval);
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(ArrowArrayAppendInterval(dst, &interval), error);
+      return NANOARROW_OK;
     }
     case NANOARROW_TYPE_DECIMAL32:
     case NANOARROW_TYPE_DECIMAL64:
@@ -141,14 +305,18 @@ static ArrowErrorCode ArrowArrayAppendArrayViewElement(struct ArrowArray* dst,
       struct ArrowDecimal decimal;
       ArrowDecimalInit(&decimal, bitwidth, /*precision=*/0, /*scale=*/0);
       ArrowArrayViewGetDecimalUnsafe(src, i, &decimal);
-      return ArrowArrayAppendDecimal(dst, &decimal);
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(ArrowArrayAppendDecimal(dst, &decimal), error);
+      return NANOARROW_OK;
     }
     case NANOARROW_TYPE_STRUCT:
       for (int64_t child_i = 0; child_i < src->n_children; child_i++) {
-        NANOARROW_RETURN_NOT_OK(ArrowArrayAppendArrayViewElement(
-            dst->children[child_i], src->children[child_i], src->offset + i, error));
+        NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+            ArrowArrayAppendStorageFromArrayViewElement(
+                dst->children[child_i], src->children[child_i], src->offset + i, error),
+            error);
       }
-      return ArrowArrayFinishElement(dst);
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(ArrowArrayFinishElement(dst), error);
+      return NANOARROW_OK;
     case NANOARROW_TYPE_LIST:
     case NANOARROW_TYPE_LARGE_LIST:
     case NANOARROW_TYPE_MAP:
@@ -166,36 +334,54 @@ static ArrowErrorCode ArrowArrayAppendArrayViewElement(struct ArrowArray* dst,
       }
 
       for (int64_t child_i = 0; child_i < child_length; child_i++) {
-        NANOARROW_RETURN_NOT_OK(ArrowArrayAppendArrayViewElement(
-            dst->children[0], src->children[0], child_offset + child_i, error));
+        NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+            ArrowArrayAppendStorageFromArrayViewElement(
+                dst->children[0], src->children[0], child_offset + child_i, error),
+            error);
       }
-      return ArrowArrayFinishElement(dst);
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(ArrowArrayFinishElement(dst), error);
+      return NANOARROW_OK;
     }
     case NANOARROW_TYPE_FIXED_SIZE_LIST: {
       int64_t child_offset = (src->offset + i) * src->layout.child_size_elements;
       for (int64_t child_i = 0; child_i < src->layout.child_size_elements; child_i++) {
-        NANOARROW_RETURN_NOT_OK(ArrowArrayAppendArrayViewElement(
-            dst->children[0], src->children[0], child_offset + child_i, error));
+        NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+            ArrowArrayAppendStorageFromArrayViewElement(
+                dst->children[0], src->children[0], child_offset + child_i, error),
+            error);
       }
-      return ArrowArrayFinishElement(dst);
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(ArrowArrayFinishElement(dst), error);
+      return NANOARROW_OK;
     }
     case NANOARROW_TYPE_DENSE_UNION:
     case NANOARROW_TYPE_SPARSE_UNION: {
       int8_t type_id = ArrowArrayViewUnionTypeId(src, i);
       int8_t child_index = ArrowArrayViewUnionChildIndex(src, i);
       int64_t child_offset = ArrowArrayViewUnionChildOffset(src, i);
-      NANOARROW_RETURN_NOT_OK(ArrowArrayAppendArrayViewElement(
-          dst->children[child_index], src->children[child_index], child_offset, error));
-      NANOARROW_RETURN_NOT_OK(
-          ArrowBufferAppend(ArrowArrayBuffer(dst, 0), &type_id, sizeof(type_id)));
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+          ArrowArrayAppendStorageFromArrayViewElement(dst->children[child_index],
+                                                      src->children[child_index],
+                                                      child_offset, error),
+          error);
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+          ArrowBufferAppend(ArrowArrayBuffer(dst, 0), &type_id, sizeof(type_id)), error);
       if (src->storage_type == NANOARROW_TYPE_DENSE_UNION) {
-        _NANOARROW_CHECK_RANGE(dst->children[child_index]->length - 1, 0, INT32_MAX);
-        NANOARROW_RETURN_NOT_OK(ArrowBufferAppendInt32(
-            ArrowArrayBuffer(dst, 1), (int32_t)dst->children[child_index]->length - 1));
+        int64_t dst_child_offset = dst->children[child_index]->length - 1;
+        if (dst_child_offset < 0 || dst_child_offset > INT32_MAX) {
+          ArrowErrorSet(error,
+                        "Expected dense union child offset to fit in int32 but "
+                        "found %" PRId64,
+                        dst_child_offset);
+          return EOVERFLOW;
+        }
+        NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+            ArrowBufferAppendInt32(ArrowArrayBuffer(dst, 1), (int32_t)dst_child_offset),
+            error);
       } else {
         for (int64_t child_i = 0; child_i < dst->n_children; child_i++) {
           if (child_i != child_index && dst->children[child_i]->length == dst->length) {
-            NANOARROW_RETURN_NOT_OK(ArrowArrayAppendEmpty(dst->children[child_i], 1));
+            NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+                ArrowArrayAppendEmpty(dst->children[child_i], 1), error);
           }
           if (dst->children[child_i]->length != dst->length + 1) {
             ArrowErrorSet(error,
@@ -218,29 +404,77 @@ static ArrowErrorCode ArrowArrayAppendArrayViewElement(struct ArrowArray* dst,
   }
 }
 
-ArrowErrorCode ArrowArrayAppendArrayView(struct ArrowArray* dst,
-                                         const struct ArrowArrayView* src,
-                                         struct ArrowError* error) {
+static int64_t ArrowArrayViewResolveRun(const struct ArrowArrayView* run_ends,
+                                        int64_t logical_offset) {
+  if (run_ends->length <= 1) {
+    return 0;
+  }
+
+  switch (run_ends->storage_type) {
+    case NANOARROW_TYPE_INT32:
+      return ArrowResolveChunk32(
+          (int32_t)(logical_offset + 1),
+          run_ends->buffer_views[1].data.as_int32 + run_ends->offset, 0,
+          (int32_t)run_ends->length);
+    case NANOARROW_TYPE_INT64:
+      return ArrowResolveChunk64(
+          logical_offset + 1, run_ends->buffer_views[1].data.as_int64 + run_ends->offset,
+          0, run_ends->length);
+    case NANOARROW_TYPE_INT16:
+    default: {
+      int64_t run = 0;
+      while (run + 1 < run_ends->length &&
+             ArrowArrayViewGetIntUnsafe(run_ends, run) <= logical_offset) {
+        run++;
+      }
+      return run;
+    }
+  }
+}
+
+ArrowErrorCode ArrowArrayAppendStorageFromArrayView(struct ArrowArray* dst,
+                                                    const struct ArrowArrayView* src,
+                                                    struct ArrowError* error) {
+  NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+      ArrowArrayCheckCanAppendStorageFromArrayView(dst, src, error), error);
+
   if (src->storage_type == NANOARROW_TYPE_RUN_END_ENCODED) {
-    if (src->offset != 0) {
-      ArrowErrorSet(error, "Can't append a sliced run-end encoded array view");
-      return ENOTSUP;
+    if (src->length == 0) {
+      return NANOARROW_OK;
     }
 
+    const struct ArrowArrayView* run_ends = src->children[0];
+    if (run_ends->length == 0) {
+      ArrowErrorSet(error,
+                    "Expected a non-empty run ends array for a non-empty "
+                    "run-end encoded array");
+      return EINVAL;
+    }
+
+    int64_t first_run = ArrowArrayViewResolveRun(run_ends, src->offset);
+    int64_t slice_end = src->offset + src->length;
     int64_t run_end_offset = dst->length;
-    for (int64_t i = 0; i < src->children[0]->length; i++) {
-      NANOARROW_RETURN_NOT_OK(ArrowArrayAppendInt(
-          dst->children[0],
-          run_end_offset + ArrowArrayViewGetIntUnsafe(src->children[0], i)));
-      NANOARROW_RETURN_NOT_OK(
-          ArrowArrayAppendArrayViewElement(dst->children[1], src->children[1], i, error));
+    for (int64_t i = first_run; i < run_ends->length; i++) {
+      int64_t src_run_end = ArrowArrayViewGetIntUnsafe(run_ends, i);
+      int64_t clipped_run_end = src_run_end < slice_end ? src_run_end : slice_end;
+      int64_t dst_run_end = run_end_offset + clipped_run_end - src->offset;
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+          ArrowArrayAppendInt(dst->children[0], dst_run_end), error);
+      NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+          ArrowArrayAppendStorageFromArrayViewElement(dst->children[1], src->children[1],
+                                                      i, error),
+          error);
+      if (src_run_end >= slice_end) {
+        break;
+      }
     }
     dst->length += src->length;
     return NANOARROW_OK;
   }
 
   for (int64_t i = 0; i < src->length; i++) {
-    NANOARROW_RETURN_NOT_OK(ArrowArrayAppendArrayViewElement(dst, src, i, error));
+    NANOARROW_RETURN_NOT_OK_WITH_ERROR(
+        ArrowArrayAppendStorageFromArrayViewElement(dst, src, i, error), error);
   }
   return NANOARROW_OK;
 }

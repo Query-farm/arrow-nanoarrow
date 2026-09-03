@@ -135,6 +135,7 @@ static int ArrowTypeIsListLike(enum ArrowType type) {
     case NANOARROW_TYPE_MAP:
     case NANOARROW_TYPE_LIST_VIEW:
     case NANOARROW_TYPE_LARGE_LIST_VIEW:
+    case NANOARROW_TYPE_FIXED_SIZE_LIST:
       return 1;
     default:
       return 0;
@@ -211,6 +212,7 @@ static ArrowErrorCode ArrowArrayCheckCanAppendStorageFromArrayView(
   }
 
   if (src->storage_type == NANOARROW_TYPE_FIXED_SIZE_LIST &&
+      dst_type == NANOARROW_TYPE_FIXED_SIZE_LIST &&
       src->layout.child_size_elements != private_data->layout.child_size_elements) {
     ArrowErrorSet(error,
                   "Expected source and destination fixed-size list child sizes to "
@@ -221,6 +223,7 @@ static ArrowErrorCode ArrowArrayCheckCanAppendStorageFromArrayView(
   }
 
   if (src->storage_type == NANOARROW_TYPE_FIXED_SIZE_BINARY &&
+      dst_type == NANOARROW_TYPE_FIXED_SIZE_BINARY &&
       src->layout.element_size_bits[1] != private_data->layout.element_size_bits[1]) {
     ArrowErrorSet(error,
                   "Expected source and destination fixed-size binary widths to "

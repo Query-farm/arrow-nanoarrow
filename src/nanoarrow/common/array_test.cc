@@ -5398,6 +5398,92 @@ TEST(ArrayTest, ArrayAppendStorageFromArrayViewFixedWidthSlicedValidity) {
   ArrowArrayRelease(&src);
 }
 
+TEST(ArrayTest, ArrayAppendStorageFromArrayViewFixedToVariableWidth) {
+  struct ArrowError error;
+
+  struct ArrowSchema fixed_binary_schema;
+  ArrowSchemaInit(&fixed_binary_schema);
+  ASSERT_EQ(ArrowSchemaSetTypeFixedSize(&fixed_binary_schema,
+                                        NANOARROW_TYPE_FIXED_SIZE_BINARY, 3),
+            NANOARROW_OK);
+  struct ArrowArray fixed_binary;
+  ASSERT_EQ(ArrowArrayInitFromSchema(&fixed_binary, &fixed_binary_schema, &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayStartAppending(&fixed_binary), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendBytes(&fixed_binary, {{"abc"}, 3}), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayFinishBuildingDefault(&fixed_binary, &error), NANOARROW_OK);
+  struct ArrowArrayView fixed_binary_view;
+  ASSERT_EQ(
+      ArrowArrayViewInitFromSchema(&fixed_binary_view, &fixed_binary_schema, &error),
+      NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayViewSetArray(&fixed_binary_view, &fixed_binary, &error),
+            NANOARROW_OK);
+
+  struct ArrowArray binary;
+  ASSERT_EQ(ArrowArrayInitFromType(&binary, NANOARROW_TYPE_BINARY), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayStartAppending(&binary), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendStorageFromArrayView(&binary, &fixed_binary_view, &error),
+            NANOARROW_OK)
+      << error.message;
+  ASSERT_EQ(ArrowArrayFinishBuildingDefault(&binary, &error), NANOARROW_OK);
+  struct ArrowArrayView binary_view;
+  ArrowArrayViewInitFromType(&binary_view, NANOARROW_TYPE_BINARY);
+  ASSERT_EQ(ArrowArrayViewSetArray(&binary_view, &binary, &error), NANOARROW_OK);
+  EXPECT_EQ(ArrowArrayViewGetStringUnsafe(&binary_view, 0), "abc"_asv);
+
+  ArrowArrayViewReset(&binary_view);
+  ArrowArrayRelease(&binary);
+  ArrowArrayViewReset(&fixed_binary_view);
+  ArrowArrayRelease(&fixed_binary);
+  ArrowSchemaRelease(&fixed_binary_schema);
+
+  struct ArrowSchema fixed_list_schema;
+  ArrowSchemaInit(&fixed_list_schema);
+  ASSERT_EQ(
+      ArrowSchemaSetTypeFixedSize(&fixed_list_schema, NANOARROW_TYPE_FIXED_SIZE_LIST, 2),
+      NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaSetType(fixed_list_schema.children[0], NANOARROW_TYPE_INT32),
+            NANOARROW_OK);
+  struct ArrowArray fixed_list;
+  ASSERT_EQ(ArrowArrayInitFromSchema(&fixed_list, &fixed_list_schema, &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayStartAppending(&fixed_list), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendInt(fixed_list.children[0], 1), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendInt(fixed_list.children[0], 2), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayFinishElement(&fixed_list), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayFinishBuildingDefault(&fixed_list, &error), NANOARROW_OK);
+  struct ArrowArrayView fixed_list_view;
+  ASSERT_EQ(ArrowArrayViewInitFromSchema(&fixed_list_view, &fixed_list_schema, &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayViewSetArray(&fixed_list_view, &fixed_list, &error), NANOARROW_OK);
+
+  struct ArrowSchema list_schema;
+  ASSERT_EQ(ArrowSchemaInitFromType(&list_schema, NANOARROW_TYPE_LIST), NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaSetType(list_schema.children[0], NANOARROW_TYPE_INT32),
+            NANOARROW_OK);
+  struct ArrowArray list;
+  ASSERT_EQ(ArrowArrayInitFromSchema(&list, &list_schema, &error), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayStartAppending(&list), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendStorageFromArrayView(&list, &fixed_list_view, &error),
+            NANOARROW_OK)
+      << error.message;
+  ASSERT_EQ(ArrowArrayFinishBuildingDefault(&list, &error), NANOARROW_OK);
+  struct ArrowArrayView list_view;
+  ASSERT_EQ(ArrowArrayViewInitFromSchema(&list_view, &list_schema, &error), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayViewSetArray(&list_view, &list, &error), NANOARROW_OK);
+  EXPECT_EQ(ArrowArrayViewListChildOffset(&list_view, 0), 0);
+  EXPECT_EQ(ArrowArrayViewListChildOffset(&list_view, 1), 2);
+  EXPECT_EQ(ArrowArrayViewGetIntUnsafe(list_view.children[0], 0), 1);
+  EXPECT_EQ(ArrowArrayViewGetIntUnsafe(list_view.children[0], 1), 2);
+
+  ArrowArrayViewReset(&list_view);
+  ArrowArrayRelease(&list);
+  ArrowSchemaRelease(&list_schema);
+  ArrowArrayViewReset(&fixed_list_view);
+  ArrowArrayRelease(&fixed_list);
+  ArrowSchemaRelease(&fixed_list_schema);
+}
+
 TEST(ArrayTest, ArrayAppendStorageFromArrayViewErrors) {
   struct ArrowError error;
   struct ArrowArray src;

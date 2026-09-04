@@ -436,7 +436,7 @@ static ArrowErrorCode ArrowArrayAppendValidityFromArrayView(
 
   NANOARROW_RETURN_NOT_OK_WITH_ERROR(ArrowBitmapReserve(dst_validity, src->length),
                                      error);
-  int8_t validity[1024];
+  int8_t validity[1024] = {0};
   for (int64_t offset = 0; offset < src->length;) {
     int64_t remaining = src->length - offset;
     int64_t chunk_size =

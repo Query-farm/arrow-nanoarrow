@@ -5230,7 +5230,7 @@ TEST(ArrayTest, ArrayAppendStorageFromArrayViewNestedAndSliced) {
   ArrowSchemaRelease(&schema);
 }
 
-TEST(ArrayTest, ArrayAppendStorageFromArrayViewUnions) {
+TEST(ArrayTest, ArrayAppendStorageFromArrayViewRejectsUnions) {
   for (enum ArrowType union_type :
        {NANOARROW_TYPE_DENSE_UNION, NANOARROW_TYPE_SPARSE_UNION}) {
     struct ArrowError error;
@@ -5254,17 +5254,11 @@ TEST(ArrayTest, ArrayAppendStorageFromArrayViewUnions) {
     ASSERT_EQ(ArrowArrayViewInitFromSchema(&src_view, &schema, &error), NANOARROW_OK);
     ASSERT_EQ(ArrowArrayViewSetArray(&src_view, &src, &error), NANOARROW_OK);
     struct ArrowArray dst;
-    ASSERT_EQ(AppendStorageFromArrayViewForTest(&src_view, &dst, &error), NANOARROW_OK)
-        << error.message;
-    EXPECT_EQ(dst.length, 2);
+    ASSERT_EQ(AppendStorageFromArrayViewForTest(&src_view, &dst, &error), ENOTSUP);
+    EXPECT_EQ(dst.length, 0);
+    EXPECT_EQ(std::string(error.message), "Appending array views is not supported for " +
+                                              std::string(ArrowTypeString(union_type)));
 
-    struct ArrowArrayView dst_view;
-    ASSERT_EQ(ArrowArrayViewInitFromSchema(&dst_view, &schema, &error), NANOARROW_OK);
-    ASSERT_EQ(ArrowArrayViewSetArray(&dst_view, &dst, &error), NANOARROW_OK);
-    EXPECT_EQ(ArrowArrayViewUnionTypeId(&dst_view, 0), 0);
-    EXPECT_EQ(ArrowArrayViewUnionTypeId(&dst_view, 1), 1);
-
-    ArrowArrayViewReset(&dst_view);
     ArrowArrayRelease(&dst);
     ArrowArrayViewReset(&src_view);
     ArrowArrayRelease(&src);
@@ -5393,6 +5387,45 @@ TEST(ArrayTest, ArrayAppendStorageFromArrayViewFixedWidthSlicedValidity) {
   ArrowArrayViewReset(&dst_view);
   ArrowArrayViewReset(&all_valid_view);
   ArrowArrayRelease(&all_valid);
+  ArrowArrayRelease(&dst);
+  ArrowArrayViewReset(&src_view);
+  ArrowArrayRelease(&src);
+}
+
+TEST(ArrayTest, ArrayAppendStorageFromArrayViewFixedWidthChunkedValidity) {
+  constexpr int64_t kLength = 2050;
+  struct ArrowError error;
+  struct ArrowArray src;
+  ASSERT_EQ(ArrowArrayInitFromType(&src, NANOARROW_TYPE_INT32), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayStartAppending(&src), NANOARROW_OK);
+  for (int64_t i = 0; i < kLength; i++) {
+    if (i % 3 == 0) {
+      ASSERT_EQ(ArrowArrayAppendNull(&src, 1), NANOARROW_OK);
+    } else {
+      ASSERT_EQ(ArrowArrayAppendInt(&src, i), NANOARROW_OK);
+    }
+  }
+  ASSERT_EQ(ArrowArrayFinishBuildingDefault(&src, &error), NANOARROW_OK);
+
+  struct ArrowArrayView src_view;
+  ArrowArrayViewInitFromType(&src_view, NANOARROW_TYPE_INT32);
+  ASSERT_EQ(ArrowArrayViewSetArray(&src_view, &src, &error), NANOARROW_OK);
+
+  struct ArrowArray dst;
+  ASSERT_EQ(AppendStorageFromArrayViewForTest(&src_view, &dst, &error), NANOARROW_OK)
+      << error.message;
+  EXPECT_EQ(dst.length, kLength);
+  EXPECT_EQ(dst.null_count, 684);
+
+  struct ArrowArrayView dst_view;
+  ArrowArrayViewInitFromType(&dst_view, NANOARROW_TYPE_INT32);
+  ASSERT_EQ(ArrowArrayViewSetArray(&dst_view, &dst, &error), NANOARROW_OK);
+  EXPECT_TRUE(ArrowArrayViewIsNull(&dst_view, 1023));
+  EXPECT_EQ(ArrowArrayViewGetIntUnsafe(&dst_view, 1024), 1024);
+  EXPECT_EQ(ArrowArrayViewGetIntUnsafe(&dst_view, 2048), 2048);
+  EXPECT_TRUE(ArrowArrayViewIsNull(&dst_view, 2049));
+
+  ArrowArrayViewReset(&dst_view);
   ArrowArrayRelease(&dst);
   ArrowArrayViewReset(&src_view);
   ArrowArrayRelease(&src);

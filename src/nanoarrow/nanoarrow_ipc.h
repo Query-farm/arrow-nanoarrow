@@ -132,6 +132,8 @@
   NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowIpcWriterWriteSchema)
 #define ArrowIpcWriterWriteArrayView \
   NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowIpcWriterWriteArrayView)
+#define ArrowIpcWriterWriteArrayViewWithDictionaries \
+  NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowIpcWriterWriteArrayViewWithDictionaries)
 #define ArrowIpcWriterWriteDictionaryBatch \
   NANOARROW_SYMBOL(NANOARROW_NAMESPACE, ArrowIpcWriterWriteDictionaryBatch)
 #define ArrowIpcWriterWriteArrayStream \
@@ -1182,6 +1184,19 @@ NANOARROW_DLL ArrowErrorCode ArrowIpcWriterWriteSchema(struct ArrowIpcWriter* wr
 NANOARROW_DLL ArrowErrorCode ArrowIpcWriterWriteArrayView(struct ArrowIpcWriter* writer,
                                                           const struct ArrowArrayView* in,
                                                           struct ArrowError* error);
+
+/// \brief Write an array view and the dictionaries it references
+///
+/// Writes any DictionaryBatch messages needed by the dictionary-encoded fields of
+/// in (with the same identical-suppression, delta, and replacement handling as
+/// ArrowIpcWriterWriteArrayStream()) followed by the RecordBatch itself. This lets
+/// a caller that produces batches incrementally write a stream or file one batch
+/// at a time. in must not be NULL; use ArrowIpcWriterWriteArrayView() to write EOS.
+///
+/// Errors are propagated from the underlying encoder and output byte stream.
+NANOARROW_DLL ArrowErrorCode ArrowIpcWriterWriteArrayViewWithDictionaries(
+    struct ArrowIpcWriter* writer, const struct ArrowArrayView* in,
+    struct ArrowError* error);
 
 /// \brief Write a DictionaryBatch message to the output byte stream
 ///

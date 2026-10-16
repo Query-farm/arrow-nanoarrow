@@ -19,6 +19,10 @@
 
 #include <stdio.h>
 
+#include <string>
+#include <utility>
+#include <vector>
+
 #if defined(NANOARROW_BUILD_TESTS_WITH_ARROW)
 #include <arrow/array.h>
 #include <arrow/io/memory.h>
@@ -1566,4 +1570,143 @@ TEST(NanoarrowIpcWriter, CompressedDictionaryStream) {
   struct ArrowStringView v1 = ArrowArrayViewGetStringUnsafe(values_view, 1);
   EXPECT_EQ(std::string(v0.data, v0.size_bytes), "foo");
   EXPECT_EQ(std::string(v1.data, v1.size_bytes), "bar");
+}
+
+namespace {
+
+// Walk the messages of an encapsulated IPC stream, recording each message's type and
+// custom_metadata (as a packed ArrowSchema::metadata-style string)
+std::vector<std::pair<enum ArrowIpcMessageType, std::string>> ReadMessageMetadata(
+    struct ArrowBuffer* stream_bytes) {
+  std::vector<std::pair<enum ArrowIpcMessageType, std::string>> out;
+  nanoarrow::ipc::UniqueDecoder decoder;
+  EXPECT_EQ(ArrowIpcDecoderInit(decoder.get()), NANOARROW_OK);
+
+  struct ArrowError error;
+  struct ArrowBufferView view;
+  view.data.as_uint8 = stream_bytes->data;
+  view.size_bytes = stream_bytes->size_bytes;
+
+  while (view.size_bytes > 0) {
+    ArrowErrorCode result = ArrowIpcDecoderVerifyHeader(decoder.get(), view, &error);
+    if (result == ENODATA) {
+      break;
+    }
+    EXPECT_EQ(result, NANOARROW_OK) << error.message;
+    if (result != NANOARROW_OK) {
+      break;
+    }
+
+    nanoarrow::UniqueBuffer metadata;
+    EXPECT_EQ(ArrowIpcDecoderGetMessageMetadata(decoder.get(), metadata.get(), &error),
+              NANOARROW_OK)
+        << error.message;
+    std::string packed(reinterpret_cast<const char*>(metadata->data),
+                       static_cast<size_t>(metadata->size_bytes));
+    out.emplace_back(decoder->message_type, packed);
+
+    int64_t advance = decoder->header_size_bytes + decoder->body_size_bytes;
+    view.data.as_uint8 += advance;
+    view.size_bytes -= advance;
+  }
+
+  return out;
+}
+
+}  // namespace
+
+TEST(NanoarrowIpcWriter, MessageMetadataAttachesToRecordBatchOnly) {
+  struct ArrowError error;
+
+  // struct<d: dictionary<int32, string>>
+  nanoarrow::UniqueSchema schema;
+  ASSERT_EQ(ArrowSchemaInitFromType(schema.get(), NANOARROW_TYPE_STRUCT), NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaAllocateChildren(schema.get(), 1), NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaInitFromType(schema->children[0], NANOARROW_TYPE_INT32),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaSetName(schema->children[0], "d"), NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaAllocateDictionary(schema->children[0]), NANOARROW_OK);
+  ASSERT_EQ(ArrowSchemaInitFromType(schema->children[0]->dictionary,
+                                    NANOARROW_TYPE_STRING),
+            NANOARROW_OK);
+
+  nanoarrow::UniqueArray array;
+  ASSERT_EQ(ArrowArrayInitFromSchema(array.get(), schema.get(), &error), NANOARROW_OK)
+      << error.message;
+  ASSERT_EQ(ArrowArrayStartAppending(array.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendString(array->children[0]->dictionary, ArrowCharView("foo")),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendString(array->children[0]->dictionary, ArrowCharView("bar")),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendInt(array->children[0], 1), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayFinishElement(array.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayAppendInt(array->children[0], 0), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayFinishElement(array.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowArrayFinishBuildingDefault(array.get(), &error), NANOARROW_OK)
+      << error.message;
+
+  nanoarrow::UniqueArrayView array_view;
+  ASSERT_EQ(ArrowArrayViewInitFromSchema(array_view.get(), schema.get(), &error),
+            NANOARROW_OK)
+      << error.message;
+  ASSERT_EQ(ArrowArrayViewSetArray(array_view.get(), array.get(), &error), NANOARROW_OK)
+      << error.message;
+
+  nanoarrow::UniqueBuffer output;
+  nanoarrow::ipc::UniqueOutputStream stream;
+  ASSERT_EQ(ArrowIpcOutputStreamInitBuffer(stream.get(), output.get()), NANOARROW_OK);
+  nanoarrow::ipc::UniqueWriter writer;
+  ASSERT_EQ(ArrowIpcWriterInit(writer.get(), stream.get()), NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteSchema(writer.get(), schema.get(), &error), NANOARROW_OK)
+      << error.message;
+
+  // Metadata for the first RecordBatch
+  nanoarrow::UniqueBuffer metadata;
+  ASSERT_EQ(ArrowMetadataBuilderInit(metadata.get(), nullptr), NANOARROW_OK);
+  ASSERT_EQ(ArrowMetadataBuilderAppend(metadata.get(), ArrowCharView("state"),
+                                       ArrowCharView("first")),
+            NANOARROW_OK);
+  std::string first_packed(reinterpret_cast<const char*>(metadata->data),
+                           static_cast<size_t>(metadata->size_bytes));
+  ASSERT_EQ(ArrowIpcWriterSetMessageMetadata(writer.get(), metadata.get(), &error),
+            NANOARROW_OK);
+  EXPECT_EQ(metadata->data, nullptr);
+
+  ASSERT_EQ(
+      ArrowIpcWriterWriteArrayViewWithDictionaries(writer.get(), array_view.get(), &error),
+      NANOARROW_OK)
+      << error.message;
+
+  // A second RecordBatch written with no metadata set must not inherit any
+  ASSERT_EQ(ArrowIpcWriterWriteArrayView(writer.get(), array_view.get(), &error),
+            NANOARROW_OK)
+      << error.message;
+
+  // Metadata set then cleared is never written
+  nanoarrow::UniqueBuffer cleared;
+  ASSERT_EQ(ArrowMetadataBuilderInit(cleared.get(), nullptr), NANOARROW_OK);
+  ASSERT_EQ(ArrowMetadataBuilderAppend(cleared.get(), ArrowCharView("state"),
+                                       ArrowCharView("cleared")),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterSetMessageMetadata(writer.get(), cleared.get(), &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterSetMessageMetadata(writer.get(), nullptr, &error),
+            NANOARROW_OK);
+  ASSERT_EQ(ArrowIpcWriterWriteArrayView(writer.get(), array_view.get(), &error),
+            NANOARROW_OK)
+      << error.message;
+  ASSERT_EQ(ArrowIpcWriterWriteArrayView(writer.get(), nullptr, &error), NANOARROW_OK);
+
+  auto messages = ReadMessageMetadata(output.get());
+  ASSERT_EQ(messages.size(), 5);
+  EXPECT_EQ(messages[0].first, NANOARROW_IPC_MESSAGE_TYPE_SCHEMA);
+  EXPECT_EQ(messages[0].second, "");
+  EXPECT_EQ(messages[1].first, NANOARROW_IPC_MESSAGE_TYPE_DICTIONARY_BATCH);
+  EXPECT_EQ(messages[1].second, "");
+  EXPECT_EQ(messages[2].first, NANOARROW_IPC_MESSAGE_TYPE_RECORD_BATCH);
+  EXPECT_EQ(messages[2].second, first_packed);
+  EXPECT_EQ(messages[3].first, NANOARROW_IPC_MESSAGE_TYPE_RECORD_BATCH);
+  EXPECT_EQ(messages[3].second, "");
+  EXPECT_EQ(messages[4].first, NANOARROW_IPC_MESSAGE_TYPE_RECORD_BATCH);
+  EXPECT_EQ(messages[4].second, "");
 }

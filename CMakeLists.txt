@@ -34,6 +34,8 @@ option(NANOARROW_NAMESPACE "A prefix for exported symbols" OFF)
 
 # Feature options
 option(NANOARROW_IPC "Build IPC extension" OFF)
+option(NANOARROW_USE_PACKAGE_DEPENDENCIES
+       "Use CMake packages for FlatCC and IPC compression dependencies" OFF)
 option(NANOARROW_FLATCC_ROOT_DIR "Root directory for flatcc include and lib directories"
        OFF)
 option(NANOARROW_FLATCC_INCLUDE_DIR "Include directory for flatcc includes" OFF)
@@ -193,7 +195,11 @@ if(NANOARROW_IPC)
       CACHE INTERNAL "")
 
   # A flatcc installation is unlikely, so default to building the vendored one
-  if(NOT NANOARROW_FLATCC_INCLUDE_DIR AND NOT NANOARROW_FLATCC_ROOT_DIR)
+  set(NANOARROW_FLATCC_TARGET flatccrt)
+  if(NANOARROW_USE_PACKAGE_DEPENDENCIES)
+    find_package(flatcc CONFIG REQUIRED)
+    set(NANOARROW_FLATCC_TARGET flatcc::flatccrt)
+  elseif(NOT NANOARROW_FLATCC_INCLUDE_DIR AND NOT NANOARROW_FLATCC_ROOT_DIR)
 
     # If the bundler didn't already assign the source files for the library, do so here
     if(NOT NANOARROW_BUNDLE)
@@ -266,6 +272,9 @@ if(NANOARROW_IPC)
   endif()
 
   if(NANOARROW_IPC_WITH_LZ4)
+    if(NANOARROW_USE_PACKAGE_DEPENDENCIES)
+      find_package(lz4 CONFIG REQUIRED)
+    else()
     if(NOT LZ4_LIBRARY_DIRS AND NOT LZ4_INCLUDE_DIRS)
       find_package(PkgConfig REQUIRED)
       pkg_check_modules(LZ4 REQUIRED liblz4)
@@ -287,6 +296,8 @@ if(NANOARROW_IPC)
                                                 "${LZ4_LIBRARY_DIRS}")
     endif()
 
+    endif()
+
     set(NANOARROW_IPC_EXTRA_FLAGS ${NANOARROW_IPC_EXTRA_FLAGS} "-DNANOARROW_IPC_WITH_LZ4")
     set(NANOARROW_IPC_EXTRA_LIBS ${NANOARROW_IPC_EXTRA_LIBS} lz4::lz4)
     set(NANOARROW_IPC_EXTRA_LIBS_SHARED ${NANOARROW_IPC_EXTRA_LIBS_SHARED} lz4::lz4)
@@ -303,12 +314,12 @@ if(NANOARROW_IPC)
 
   add_library(nanoarrow_ipc_static STATIC ${NANOARROW_IPC_BUILD_SOURCES})
   target_link_libraries(nanoarrow_ipc_static
-                        PRIVATE flatccrt ${NANOARROW_IPC_EXTRA_LIBS}
+                        PRIVATE ${NANOARROW_FLATCC_TARGET} ${NANOARROW_IPC_EXTRA_LIBS}
                         PUBLIC nanoarrow_static nanoarrow_coverage_config)
 
   add_library(nanoarrow_ipc_shared SHARED ${NANOARROW_IPC_BUILD_SOURCES})
   target_link_libraries(nanoarrow_ipc_shared
-                        PRIVATE flatccrt ${NANOARROW_IPC_EXTRA_LIBS_SHARED}
+                        PRIVATE ${NANOARROW_FLATCC_TARGET} ${NANOARROW_IPC_EXTRA_LIBS_SHARED}
                         PUBLIC nanoarrow_shared nanoarrow_coverage_config)
 
   install(FILES src/nanoarrow/nanoarrow_ipc.h src/nanoarrow/nanoarrow_ipc.hpp
@@ -343,7 +354,7 @@ if(NANOARROW_IPC AND (NANOARROW_BUILD_INTEGRATION_TESTS OR NANOARROW_BUILD_TESTS
   target_link_libraries(nanoarrow_ipc_integration
                         PRIVATE nanoarrow_testing_static
                                 nanoarrow_ipc_static
-                                flatccrt
+                                ${NANOARROW_FLATCC_TARGET}
                                 nanoarrow_coverage_config
                                 ${NANOARROW_IPC_EXTRA_LIBS})
 endif()
@@ -520,6 +531,10 @@ foreach(target
   if(TARGET ${target})
     # Define the nanoarrow::xxx alias target
     add_library(nanoarrow::${target} ALIAS ${target})
+
+    if(MSVC)
+      target_compile_options(${target} PRIVATE /experimental:c11atomics)
+    endif()
 
     # Ensure NANOARROW_DEBUG is defined for debug builds
     target_compile_definitions(${target} PUBLIC "$<$<CONFIG:Debug>:NANOARROW_DEBUG>")
@@ -760,7 +775,7 @@ if(NANOARROW_BUILD_TESTS)
                             nanoarrow_coverage_config)
 
       if(NOT (name MATCHES "_hpp_"))
-        target_link_libraries(nanoarrow_ipc_${name}_test flatccrt)
+        target_link_libraries(nanoarrow_ipc_${name}_test ${NANOARROW_FLATCC_TARGET})
       endif()
 
       if(Arrow_FOUND)
